@@ -105,13 +105,6 @@ function initUI() {
     tabelle.suchen(e.target.value, abteilung);
   });
 
-  // Neuer Mitarbeiter Button
-  document.getElementById('btnNeuerMitarbeiter').addEventListener('click', () => {
-    dialogManager.zeigeStammdatenHinzufuegen(() => {
-      loadData();
-    });
-  });
-
   // Menü-Items
   document.getElementById('menuStammdatenHinzufuegen').addEventListener('click', (e) => {
     e.preventDefault();
