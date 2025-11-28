@@ -37,6 +37,20 @@ class TeamplannerDataManager {
   }
 
   /**
+   * Gibt einen einzelnen Mitarbeiter zurück
+   */
+  getMitarbeiter(mitarbeiterId) {
+    const stmt = this.db.db.prepare(`
+      SELECT m.*, a.name as abteilung_name, a.farbe as abteilung_farbe
+      FROM mitarbeiter m
+      LEFT JOIN abteilungen a ON m.abteilung_id = a.id
+      WHERE m.id = ?
+    `);
+
+    return stmt.get(mitarbeiterId);
+  }
+
+  /**
    * Gibt alle Abteilungen zurück
    */
   getAlleAbteilungen() {

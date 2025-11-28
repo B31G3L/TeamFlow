@@ -123,12 +123,7 @@ class DialogManager {
    * Zeigt Stammdaten Bearbeiten Dialog
    */
   zeigeStammdatenBearbeiten(mitarbeiterId, callback) {
-    const mitarbeiter = this.dataManager.db.db.prepare(`
-      SELECT m.*, a.name as abteilung_name
-      FROM mitarbeiter m
-      LEFT JOIN abteilungen a ON m.abteilung_id = a.id
-      WHERE m.id = ?
-    `).get(mitarbeiterId);
+    const mitarbeiter = this.dataManager.getMitarbeiter(mitarbeiterId);
 
     if (!mitarbeiter) {
       showNotification('Fehler', 'Mitarbeiter nicht gefunden', 'danger');
