@@ -269,6 +269,25 @@ class TeamplannerDataManager {
   }
 
   /**
+   * Deaktiviert einen Mitarbeiter
+   */
+  mitarbeiterDeaktivieren(mitarbeiterId) {
+    try {
+      this.db.db.prepare(`
+        UPDATE mitarbeiter
+        SET status = 'INAKTIV', aktualisiert_am = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `).run(mitarbeiterId);
+
+      this.invalidateCache();
+      return true;
+    } catch (error) {
+      console.error('Fehler beim Deaktivieren:', error);
+      return false;
+    }
+  }
+
+  /**
    * Speichert einen Eintrag (Urlaub, Krankheit, etc.)
    */
   speichereEintrag(eintrag) {
