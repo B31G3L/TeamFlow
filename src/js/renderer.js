@@ -122,7 +122,9 @@ function initUI() {
 
   document.getElementById('menuStammdatenVerwalten').addEventListener('click', (e) => {
     e.preventDefault();
-    showNotification('Info', 'Diese Funktion ist noch nicht implementiert', 'info');
+    dialogManager.zeigeStammdatenVerwalten(() => {
+      loadData();
+    });
   });
 
   document.getElementById('menuAbteilungenVerwalten').addEventListener('click', (e) => {
@@ -160,6 +162,10 @@ function initUI() {
 
     if (button.classList.contains('btn-details')) {
       zeigeDetails(mitarbeiterId);
+    } else if (button.classList.contains('btn-bearbeiten')) {
+      dialogManager.zeigeStammdatenBearbeiten(mitarbeiterId, () => {
+        loadData();
+      });
     } else if (button.classList.contains('btn-urlaub')) {
       dialogManager.zeigeUrlaubDialog(mitarbeiterId, () => {
         loadData();

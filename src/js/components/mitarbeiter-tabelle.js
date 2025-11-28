@@ -87,6 +87,9 @@ class MitarbeiterTabelle {
           <button class="btn btn-outline-primary btn-details" data-id="${stat.mitarbeiter.id}" title="Details">
             <i class="bi bi-eye"></i>
           </button>
+          <button class="btn btn-outline-secondary btn-bearbeiten" data-id="${stat.mitarbeiter.id}" title="Bearbeiten">
+            <i class="bi bi-pencil"></i>
+          </button>
           <button class="btn btn-outline-success btn-urlaub" data-id="${stat.mitarbeiter.id}" title="Urlaub">
             <i class="bi bi-calendar-plus"></i>
           </button>
