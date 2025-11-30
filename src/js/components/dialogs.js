@@ -3,9 +3,188 @@
  * Bootstrap Modals für alle Eingabe-Dialoge
  */
 
+/**
+ * Berechnet die Anzahl der Arbeitstage zwischen zwei Daten (ohne Wochenenden)
+ */
+function berechneArbeitstage(vonDatum, bisDatum) {
+  const von = new Date(vonDatum);
+  const bis = new Date(bisDatum);
+  
+  let arbeitstage = 0;
+  const current = new Date(von);
+  
+  while (current <= bis) {
+    const dayOfWeek = current.getDay();
+    // 0 = Sonntag, 6 = Samstag
+    if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+      arbeitstage++;
+    }
+    current.setDate(current.getDate() + 1);
+  }
+  
+  return arbeitstage;
+}
+
+/**
+ * Berechnet das End-Datum basierend auf Arbeitstagen
+ */
+function berechneEndDatumNachArbeitstagen(vonDatum, arbeitstage) {
+  const von = new Date(vonDatum);
+  let verbleibendeArbeitstage = Math.floor(arbeitstage);
+  const current = new Date(von);
+  
+  while (verbleibendeArbeitstage > 0) {
+    const dayOfWeek = current.getDay();
+    if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+      verbleibendeArbeitstage--;
+    }
+    if (verbleibendeArbeitstage > 0) {
+      current.setDate(current.getDate() + 1);
+    }
+  }
+  
+  return current.toISOString().split('T')[0];
+}
+
 class DialogManager {
   constructor(dataManager) {
     this.dataManager = dataManager;
+  }
+
+  /**
+   * Prüft Kollegen-Abwesenheiten in der gleichen Abteilung
+   */
+  async pruefeKollegenAbwesenheiten(mitarbeiterId, vonDatum, bisDatum, typ) {
+    // Mitarbeiter laden um Abteilung zu ermitteln
+    const mitarbeiter = await this.dataManager.getMitarbeiter(mitarbeiterId);
+    if (!mitarbeiter) return [];
+
+    const abteilungId = mitarbeiter.abteilung_id;
+
+    // Alle Mitarbeiter in der gleichen Abteilung außer dem aktuellen
+    const kollegen = await this.dataManager.db.query(`
+      SELECT id, vorname, nachname
+      FROM mitarbeiter
+      WHERE abteilung_id = ? AND id != ? AND status = 'AKTIV'
+    `, [abteilungId, mitarbeiterId]);
+
+    const abwesenheiten = [];
+
+    for (const kollege of kollegen) {
+      // Prüfe Urlaub
+      const urlaub = await this.dataManager.db.query(`
+        SELECT von_datum, bis_datum, tage
+        FROM urlaub
+        WHERE mitarbeiter_id = ?
+          AND ((von_datum BETWEEN ? AND ?) OR (bis_datum BETWEEN ? AND ?) 
+               OR (von_datum <= ? AND bis_datum >= ?))
+      `, [kollege.id, vonDatum, bisDatum, vonDatum, bisDatum, vonDatum, bisDatum]);
+
+      if (urlaub.length > 0) {
+        urlaub.forEach(u => {
+          abwesenheiten.push({
+            name: `${kollege.vorname} ${kollege.nachname}`,
+            typ: 'Urlaub',
+            von: u.von_datum,
+            bis: u.bis_datum,
+            tage: u.tage,
+            klasse: 'text-success'
+          });
+        });
+      }
+
+      // Prüfe Krankheit
+      const krankheit = await this.dataManager.db.query(`
+        SELECT von_datum, bis_datum, tage
+        FROM krankheit
+        WHERE mitarbeiter_id = ?
+          AND ((von_datum BETWEEN ? AND ?) OR (bis_datum BETWEEN ? AND ?) 
+               OR (von_datum <= ? AND bis_datum >= ?))
+      `, [kollege.id, vonDatum, bisDatum, vonDatum, bisDatum, vonDatum, bisDatum]);
+
+      if (krankheit.length > 0) {
+        krankheit.forEach(k => {
+          abwesenheiten.push({
+            name: `${kollege.vorname} ${kollege.nachname}`,
+            typ: 'Krank',
+            von: k.von_datum,
+            bis: k.bis_datum,
+            tage: k.tage,
+            klasse: 'text-danger'
+          });
+        });
+      }
+
+      // Prüfe Schulung
+      const schulung = await this.dataManager.db.query(`
+        SELECT datum, dauer_tage, titel
+        FROM schulung
+        WHERE mitarbeiter_id = ?
+          AND datum BETWEEN ? AND ?
+      `, [kollege.id, vonDatum, bisDatum]);
+
+      if (schulung.length > 0) {
+        schulung.forEach(s => {
+          // Berechne End-Datum
+          const start = new Date(s.datum);
+          const end = new Date(start);
+          end.setDate(end.getDate() + Math.floor(s.dauer_tage) - 1);
+
+          abwesenheiten.push({
+            name: `${kollege.vorname} ${kollege.nachname}`,
+            typ: 'Schulung',
+            von: s.datum,
+            bis: end.toISOString().split('T')[0],
+            tage: s.dauer_tage,
+            titel: s.titel,
+            klasse: 'text-info'
+          });
+        });
+      }
+    }
+
+    return abwesenheiten;
+  }
+
+  /**
+   * Erstellt HTML für Kollegen-Hinweise
+   */
+  erstelleKollegenHinweisHTML(abwesenheiten) {
+    if (abwesenheiten.length === 0) {
+      return `
+        <div class="alert alert-success" role="alert">
+          <i class="bi bi-check-circle"></i> <strong>Keine Überschneidungen:</strong> 
+          Alle Kollegen in deiner Abteilung sind verfügbar.
+        </div>
+      `;
+    }
+
+    let html = `
+      <div class="alert alert-warning" role="alert">
+        <i class="bi bi-exclamation-triangle"></i> <strong>Achtung:</strong> 
+        Folgende Kollegen aus deiner Abteilung sind ebenfalls abwesend:
+        <ul class="mb-0 mt-2">
+    `;
+
+    abwesenheiten.forEach(a => {
+      const vonFormatiert = new Date(a.von).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
+      const bisFormatiert = new Date(a.bis).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
+      
+      html += `
+        <li class="${a.klasse}">
+          <strong>${a.name}</strong> - ${a.typ} 
+          (${vonFormatiert} - ${bisFormatiert}, ${a.tage.toFixed(1)} Tage)
+          ${a.titel ? `<br><small class="text-muted">${a.titel}</small>` : ''}
+        </li>
+      `;
+    });
+
+    html += `
+        </ul>
+      </div>
+    `;
+
+    return html;
   }
 
   /**
@@ -783,7 +962,7 @@ class DialogManager {
                 </div>
 
                 <div class="mb-3">
-                  <label class="form-label">Dauer (Tage): <span id="dauerAnzeige" class="fw-bold">1</span></label>
+                  <label class="form-label">Arbeitstage (ohne Wochenende): <span id="dauerAnzeige" class="fw-bold">1</span></label>
                   <div class="mt-2">
                     <small class="text-muted d-block mb-1">Schnellauswahl:</small>
                     <div class="d-flex gap-2 flex-wrap">
@@ -796,6 +975,9 @@ class DialogManager {
                     </div>
                   </div>
                 </div>
+
+                <!-- Kollegen-Hinweise Container -->
+                <div id="kollegenHinweise"></div>
 
                 <div class="mb-3">
                   <label class="form-label">Notizen</label>
@@ -824,15 +1006,9 @@ class DialogManager {
       const vonDatum = document.getElementById('vonDatum').value;
       const bisDatum = document.getElementById('bisDatum').value;
 
-      // Berechne Tage
-      const von = new Date(vonDatum);
-      const bis = new Date(bisDatum);
-      const diffTime = bis - von;
-      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
-      
-      // Prüfe ob halber Tag ausgewählt
+      // Berechne Arbeitstage (ohne Wochenenden)
       const dauerAnzeige = document.getElementById('dauerAnzeige').textContent;
-      const tage = dauerAnzeige === '0.5' ? 0.5 : diffDays;
+      const tage = parseFloat(dauerAnzeige);
 
       const eintrag = {
         typ: 'urlaub',
@@ -854,32 +1030,36 @@ class DialogManager {
     });
 
     // Event-Listener für Datum-Validierung und Dauer-Berechnung
-    setTimeout(() => {
+    setTimeout(async () => {
       const vonDatumInput = document.getElementById('vonDatum');
       const bisDatumInput = document.getElementById('bisDatum');
       const dauerAnzeige = document.getElementById('dauerAnzeige');
+      const kollegenHinweiseDiv = document.getElementById('kollegenHinweise');
 
-      const berechneDauer = () => {
-        const von = new Date(vonDatumInput.value);
-        const bis = new Date(bisDatumInput.value);
+      const berechneDauer = async () => {
+        const von = vonDatumInput.value;
+        const bis = bisDatumInput.value;
         
-        if (bis < von) {
-          bisDatumInput.value = vonDatumInput.value;
+        if (new Date(bis) < new Date(von)) {
+          bisDatumInput.value = von;
           dauerAnzeige.textContent = '1';
         } else {
-          const diffTime = bis - von;
-          const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
-          dauerAnzeige.textContent = diffDays;
+          const arbeitstage = berechneArbeitstage(von, bis);
+          dauerAnzeige.textContent = arbeitstage;
+
+          // Prüfe Kollegen-Abwesenheiten
+          const abwesenheiten = await this.pruefeKollegenAbwesenheiten(mitarbeiterId, von, bis, 'urlaub');
+          kollegenHinweiseDiv.innerHTML = this.erstelleKollegenHinweisHTML(abwesenheiten);
         }
       };
 
-      vonDatumInput.addEventListener('change', () => {
+      vonDatumInput.addEventListener('change', async () => {
         // Bis-Datum mindestens Von-Datum
         if (bisDatumInput.value < vonDatumInput.value) {
           bisDatumInput.value = vonDatumInput.value;
         }
         bisDatumInput.min = vonDatumInput.value;
-        berechneDauer();
+        await berechneDauer();
       });
 
       bisDatumInput.addEventListener('change', berechneDauer);
@@ -887,23 +1067,34 @@ class DialogManager {
       // Setze initiales min für Bis-Datum
       bisDatumInput.min = vonDatumInput.value;
 
+      // Initial prüfen
+      await berechneDauer();
+
       // Dauer-Buttons
       document.querySelectorAll('.dauer-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
+        btn.addEventListener('click', async () => {
           const tage = parseFloat(btn.dataset.tage);
-          const von = new Date(vonDatumInput.value);
+          const von = vonDatumInput.value;
           
           if (tage === 0.5) {
             // Halber Tag: Von und Bis gleich, aber Dauer 0.5
-            bisDatumInput.value = vonDatumInput.value;
+            bisDatumInput.value = von;
             dauerAnzeige.textContent = '0.5';
           } else {
-            // Berechne Bis-Datum basierend auf Tagen
-            const bis = new Date(von);
-            bis.setDate(bis.getDate() + tage - 1);
-            bisDatumInput.value = bis.toISOString().split('T')[0];
+            // Berechne Bis-Datum basierend auf Arbeitstagen
+            const bis = berechneEndDatumNachArbeitstagen(von, tage);
+            bisDatumInput.value = bis;
             dauerAnzeige.textContent = tage;
           }
+
+          // Prüfe Kollegen nach Änderung
+          const abwesenheiten = await this.pruefeKollegenAbwesenheiten(
+            mitarbeiterId, 
+            vonDatumInput.value, 
+            bisDatumInput.value, 
+            'urlaub'
+          );
+          kollegenHinweiseDiv.innerHTML = this.erstelleKollegenHinweisHTML(abwesenheiten);
         });
       });
     }, 100);
@@ -940,7 +1131,7 @@ class DialogManager {
                 </div>
 
                 <div class="mb-3">
-                  <label class="form-label">Dauer (Tage): <span id="dauerAnzeige" class="fw-bold">1</span></label>
+                  <label class="form-label">Arbeitstage (ohne Wochenende): <span id="dauerAnzeige" class="fw-bold">1</span></label>
                   <div class="mt-2">
                     <small class="text-muted d-block mb-1">Schnellauswahl:</small>
                     <div class="d-flex gap-2 flex-wrap">
@@ -952,6 +1143,9 @@ class DialogManager {
                     </div>
                   </div>
                 </div>
+
+                <!-- Kollegen-Hinweise Container -->
+                <div id="kollegenHinweise"></div>
 
                 <div class="mb-3">
                   <label class="form-label">Notizen</label>
@@ -980,15 +1174,9 @@ class DialogManager {
       const vonDatum = document.getElementById('vonDatum').value;
       const bisDatum = document.getElementById('bisDatum').value;
 
-      // Berechne Tage
-      const von = new Date(vonDatum);
-      const bis = new Date(bisDatum);
-      const diffTime = bis - von;
-      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
-      
-      // Prüfe ob halber Tag ausgewählt
+      // Berechne Arbeitstage (ohne Wochenenden)
       const dauerAnzeige = document.getElementById('dauerAnzeige').textContent;
-      const tage = dauerAnzeige === '0.5' ? 0.5 : diffDays;
+      const tage = parseFloat(dauerAnzeige);
 
       const eintrag = {
         typ: 'krank',
@@ -1010,32 +1198,35 @@ class DialogManager {
     });
 
     // Event-Listener für Datum-Validierung und Dauer-Berechnung
-    setTimeout(() => {
+    setTimeout(async () => {
       const vonDatumInput = document.getElementById('vonDatum');
       const bisDatumInput = document.getElementById('bisDatum');
       const dauerAnzeige = document.getElementById('dauerAnzeige');
+      const kollegenHinweiseDiv = document.getElementById('kollegenHinweise');
 
-      const berechneDauer = () => {
-        const von = new Date(vonDatumInput.value);
-        const bis = new Date(bisDatumInput.value);
+      const berechneDauer = async () => {
+        const von = vonDatumInput.value;
+        const bis = bisDatumInput.value;
         
-        if (bis < von) {
-          bisDatumInput.value = vonDatumInput.value;
+        if (new Date(bis) < new Date(von)) {
+          bisDatumInput.value = von;
           dauerAnzeige.textContent = '1';
         } else {
-          const diffTime = bis - von;
-          const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
-          dauerAnzeige.textContent = diffDays;
+          const arbeitstage = berechneArbeitstage(von, bis);
+          dauerAnzeige.textContent = arbeitstage;
+
+          // Prüfe Kollegen-Abwesenheiten
+          const abwesenheiten = await this.pruefeKollegenAbwesenheiten(mitarbeiterId, von, bis, 'krank');
+          kollegenHinweiseDiv.innerHTML = this.erstelleKollegenHinweisHTML(abwesenheiten);
         }
       };
 
-      vonDatumInput.addEventListener('change', () => {
-        // Bis-Datum mindestens Von-Datum
+      vonDatumInput.addEventListener('change', async () => {
         if (bisDatumInput.value < vonDatumInput.value) {
           bisDatumInput.value = vonDatumInput.value;
         }
         bisDatumInput.min = vonDatumInput.value;
-        berechneDauer();
+        await berechneDauer();
       });
 
       bisDatumInput.addEventListener('change', berechneDauer);
@@ -1043,23 +1234,32 @@ class DialogManager {
       // Setze initiales min für Bis-Datum
       bisDatumInput.min = vonDatumInput.value;
 
+      // Initial prüfen
+      await berechneDauer();
+
       // Dauer-Buttons
       document.querySelectorAll('.dauer-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
+        btn.addEventListener('click', async () => {
           const tage = parseFloat(btn.dataset.tage);
-          const von = new Date(vonDatumInput.value);
+          const von = vonDatumInput.value;
           
           if (tage === 0.5) {
-            // Halber Tag: Von und Bis gleich, aber Dauer 0.5
-            bisDatumInput.value = vonDatumInput.value;
+            bisDatumInput.value = von;
             dauerAnzeige.textContent = '0.5';
           } else {
-            // Berechne Bis-Datum basierend auf Tagen
-            const bis = new Date(von);
-            bis.setDate(bis.getDate() + tage - 1);
-            bisDatumInput.value = bis.toISOString().split('T')[0];
+            const bis = berechneEndDatumNachArbeitstagen(von, tage);
+            bisDatumInput.value = bis;
             dauerAnzeige.textContent = tage;
           }
+
+          // Prüfe Kollegen nach Änderung
+          const abwesenheiten = await this.pruefeKollegenAbwesenheiten(
+            mitarbeiterId, 
+            vonDatumInput.value, 
+            bisDatumInput.value, 
+            'krank'
+          );
+          kollegenHinweiseDiv.innerHTML = this.erstelleKollegenHinweisHTML(abwesenheiten);
         });
       });
     }, 100);
@@ -1096,7 +1296,7 @@ class DialogManager {
                 </div>
 
                 <div class="mb-3">
-                  <label class="form-label">Dauer (Tage): <span id="dauerAnzeige" class="fw-bold">1</span></label>
+                  <label class="form-label">Arbeitstage (ohne Wochenende): <span id="dauerAnzeige" class="fw-bold">1</span></label>
                   <div class="mt-2">
                     <small class="text-muted d-block mb-1">Schnellauswahl:</small>
                     <div class="d-flex gap-2 flex-wrap">
@@ -1108,6 +1308,9 @@ class DialogManager {
                     </div>
                   </div>
                 </div>
+
+                <!-- Kollegen-Hinweise Container -->
+                <div id="kollegenHinweise"></div>
 
                 <div class="mb-3">
                   <label class="form-label">Schulungstitel</label>
@@ -1141,15 +1344,9 @@ class DialogManager {
       const vonDatum = document.getElementById('vonDatum').value;
       const bisDatum = document.getElementById('bisDatum').value;
 
-      // Berechne Tage
-      const von = new Date(vonDatum);
-      const bis = new Date(bisDatum);
-      const diffTime = bis - von;
-      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
-      
-      // Prüfe ob halber Tag ausgewählt
+      // Berechne Arbeitstage (ohne Wochenenden)
       const dauerAnzeige = document.getElementById('dauerAnzeige').textContent;
-      const tage = dauerAnzeige === '0.5' ? 0.5 : diffDays;
+      const tage = parseFloat(dauerAnzeige);
 
       const eintrag = {
         typ: 'schulung',
@@ -1172,32 +1369,35 @@ class DialogManager {
     });
 
     // Event-Listener für Datum-Validierung und Dauer-Berechnung
-    setTimeout(() => {
+    setTimeout(async () => {
       const vonDatumInput = document.getElementById('vonDatum');
       const bisDatumInput = document.getElementById('bisDatum');
       const dauerAnzeige = document.getElementById('dauerAnzeige');
+      const kollegenHinweiseDiv = document.getElementById('kollegenHinweise');
 
-      const berechneDauer = () => {
-        const von = new Date(vonDatumInput.value);
-        const bis = new Date(bisDatumInput.value);
+      const berechneDauer = async () => {
+        const von = vonDatumInput.value;
+        const bis = bisDatumInput.value;
         
-        if (bis < von) {
-          bisDatumInput.value = vonDatumInput.value;
+        if (new Date(bis) < new Date(von)) {
+          bisDatumInput.value = von;
           dauerAnzeige.textContent = '1';
         } else {
-          const diffTime = bis - von;
-          const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
-          dauerAnzeige.textContent = diffDays;
+          const arbeitstage = berechneArbeitstage(von, bis);
+          dauerAnzeige.textContent = arbeitstage;
+
+          // Prüfe Kollegen-Abwesenheiten
+          const abwesenheiten = await this.pruefeKollegenAbwesenheiten(mitarbeiterId, von, bis, 'schulung');
+          kollegenHinweiseDiv.innerHTML = this.erstelleKollegenHinweisHTML(abwesenheiten);
         }
       };
 
-      vonDatumInput.addEventListener('change', () => {
-        // Bis-Datum mindestens Von-Datum
+      vonDatumInput.addEventListener('change', async () => {
         if (bisDatumInput.value < vonDatumInput.value) {
           bisDatumInput.value = vonDatumInput.value;
         }
         bisDatumInput.min = vonDatumInput.value;
-        berechneDauer();
+        await berechneDauer();
       });
 
       bisDatumInput.addEventListener('change', berechneDauer);
@@ -1205,23 +1405,32 @@ class DialogManager {
       // Setze initiales min für Bis-Datum
       bisDatumInput.min = vonDatumInput.value;
 
+      // Initial prüfen
+      await berechneDauer();
+
       // Dauer-Buttons
       document.querySelectorAll('.dauer-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
+        btn.addEventListener('click', async () => {
           const tage = parseFloat(btn.dataset.tage);
-          const von = new Date(vonDatumInput.value);
+          const von = vonDatumInput.value;
           
           if (tage === 0.5) {
-            // Halber Tag: Von und Bis gleich, aber Dauer 0.5
-            bisDatumInput.value = vonDatumInput.value;
+            bisDatumInput.value = von;
             dauerAnzeige.textContent = '0.5';
           } else {
-            // Berechne Bis-Datum basierend auf Tagen
-            const bis = new Date(von);
-            bis.setDate(bis.getDate() + tage - 1);
-            bisDatumInput.value = bis.toISOString().split('T')[0];
+            const bis = berechneEndDatumNachArbeitstagen(von, tage);
+            bisDatumInput.value = bis;
             dauerAnzeige.textContent = tage;
           }
+
+          // Prüfe Kollegen nach Änderung
+          const abwesenheiten = await this.pruefeKollegenAbwesenheiten(
+            mitarbeiterId, 
+            vonDatumInput.value, 
+            bisDatumInput.value, 
+            'schulung'
+          );
+          kollegenHinweiseDiv.innerHTML = this.erstelleKollegenHinweisHTML(abwesenheiten);
         });
       });
     }, 100);
