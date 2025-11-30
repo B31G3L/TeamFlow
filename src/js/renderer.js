@@ -148,36 +148,44 @@ async function initUI() {
     showNotification('Aktualisiert', 'Daten wurden neu geladen', 'success');
   });
 
-  // Event Delegation für Tabellen-Buttons
+  // Event Delegation für klickbare Tabellenzellen
   document.getElementById('mitarbeiterTabelleBody').addEventListener('click', (e) => {
-    const button = e.target.closest('button');
-    if (!button) return;
+    const clickable = e.target.closest('.clickable');
+    if (!clickable) return;
 
-    const mitarbeiterId = button.dataset.id;
-    if (!mitarbeiterId) return;
+    const mitarbeiterId = clickable.dataset.id;
+    const action = clickable.dataset.action;
+    if (!mitarbeiterId || !action) return;
 
-    if (button.classList.contains('btn-details')) {
-      zeigeDetails(mitarbeiterId);
-    } else if (button.classList.contains('btn-bearbeiten')) {
-      dialogManager.zeigeStammdatenBearbeiten(mitarbeiterId, async () => {
-        await loadData();
-      });
-    } else if (button.classList.contains('btn-urlaub')) {
-      dialogManager.zeigeUrlaubDialog(mitarbeiterId, async () => {
-        await loadData();
-      });
-    } else if (button.classList.contains('btn-krank')) {
-      dialogManager.zeigeKrankDialog(mitarbeiterId, async () => {
-        await loadData();
-      });
-    } else if (button.classList.contains('btn-schulung')) {
-      dialogManager.zeigeSchulungDialog(mitarbeiterId, async () => {
-        await loadData();
-      });
-    } else if (button.classList.contains('btn-ueberstunden')) {
-      dialogManager.zeigeUeberstundenDialog(mitarbeiterId, async () => {
-        await loadData();
-      });
+    switch (action) {
+      case 'details':
+        zeigeDetails(mitarbeiterId);
+        break;
+      case 'bearbeiten':
+        dialogManager.zeigeStammdatenBearbeiten(mitarbeiterId, async () => {
+          await loadData();
+        });
+        break;
+      case 'urlaub':
+        dialogManager.zeigeUrlaubDialog(mitarbeiterId, async () => {
+          await loadData();
+        });
+        break;
+      case 'krank':
+        dialogManager.zeigeKrankDialog(mitarbeiterId, async () => {
+          await loadData();
+        });
+        break;
+      case 'schulung':
+        dialogManager.zeigeSchulungDialog(mitarbeiterId, async () => {
+          await loadData();
+        });
+        break;
+      case 'ueberstunden':
+        dialogManager.zeigeUeberstundenDialog(mitarbeiterId, async () => {
+          await loadData();
+        });
+        break;
     }
   });
 }
@@ -280,7 +288,7 @@ async function zeigeDetails(mitarbeiterId) {
                 <table class="table table-sm">
                   <tr>
                     <th>Anspruch:</th>
-                    <td>${ma.urlaubstage_jahr} Tage</td>
+                    <td>${stat.urlaubsanspruch.toFixed(1)} Tage ${stat.urlaubsanspruch < ma.urlaubstage_jahr ? '<small class="text-muted">(anteilig)</small>' : ''}</td>
                   </tr>
                   <tr>
                     <th>Übertrag:</th>

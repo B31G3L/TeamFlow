@@ -16,7 +16,6 @@ class MitarbeiterTabelle {
   async aktualisieren(abteilung = null) {
     this.aktuelleStatistiken = await this.dataManager.getAlleStatistiken(abteilung);
     this.render();
-    this.updateStatistiken();
   }
 
   /**
@@ -67,71 +66,25 @@ class MitarbeiterTabelle {
 
     tr.innerHTML = `
       <td class="text-muted">${nr}</td>
-      <td class="fw-bold">${stat.mitarbeiter.vorname} ${stat.mitarbeiter.nachname}</td>
+      <td class="clickable clickable-name fw-bold" data-id="${stat.mitarbeiter.id}" data-action="details">
+        ${stat.mitarbeiter.vorname} ${stat.mitarbeiter.nachname}
+      </td>
       <td>
         <span class="abteilung-badge" style="background-color: ${abteilungFarbe}">
           ${stat.mitarbeiter.abteilung_name || 'Unbekannt'}
         </span>
       </td>
-      <td>${stat.mitarbeiter.urlaubstage_jahr}</td>
+      <td class="clickable" data-id="${stat.mitarbeiter.id}" data-action="bearbeiten">${stat.urlaubsanspruch.toFixed(1)}</td>
       <td class="text-info">${stat.uebertrag_vorjahr.toFixed(1)}</td>
       <td class="fw-bold">${stat.urlaub_verfuegbar.toFixed(1)}</td>
-      <td class="text-warning">${stat.urlaub_genommen.toFixed(1)}</td>
+      <td class="clickable text-success" data-id="${stat.mitarbeiter.id}" data-action="urlaub">${stat.urlaub_genommen.toFixed(1)}</td>
       <td class="${restClass}">${stat.urlaub_rest.toFixed(1)}</td>
-      <td class="text-danger">${stat.krankheitstage.toFixed(1)}</td>
-      <td class="text-info">${stat.schulungstage.toFixed(1)}</td>
-      <td class="text-warning">${stat.ueberstunden.toFixed(1)}</td>
-      <td>
-        <div class="btn-group btn-group-sm" role="group">
-          <button class="btn btn-outline-primary btn-details" data-id="${stat.mitarbeiter.id}" title="Details">
-            <i class="bi bi-eye"></i>
-          </button>
-          <button class="btn btn-outline-secondary btn-bearbeiten" data-id="${stat.mitarbeiter.id}" title="Bearbeiten">
-            <i class="bi bi-pencil"></i>
-          </button>
-          <button class="btn btn-outline-success btn-urlaub" data-id="${stat.mitarbeiter.id}" title="Urlaub">
-            <i class="bi bi-calendar-plus"></i>
-          </button>
-          <button class="btn btn-outline-danger btn-krank" data-id="${stat.mitarbeiter.id}" title="Krankheit">
-            <i class="bi bi-bandaid"></i>
-          </button>
-          <button class="btn btn-outline-info btn-schulung" data-id="${stat.mitarbeiter.id}" title="Schulung">
-            <i class="bi bi-book"></i>
-          </button>
-          <button class="btn btn-outline-warning btn-ueberstunden" data-id="${stat.mitarbeiter.id}" title="Überstunden">
-            <i class="bi bi-clock"></i>
-          </button>
-        </div>
-      </td>
+      <td class="clickable text-danger" data-id="${stat.mitarbeiter.id}" data-action="krank">${stat.krankheitstage.toFixed(1)}</td>
+      <td class="clickable text-info" data-id="${stat.mitarbeiter.id}" data-action="schulung">${stat.schulungstage.toFixed(1)}</td>
+      <td class="clickable text-warning" data-id="${stat.mitarbeiter.id}" data-action="ueberstunden">${stat.ueberstunden.toFixed(1)}</td>
     `;
 
     return tr;
-  }
-
-  /**
-   * Aktualisiert die Statistik-Footer
-   */
-  updateStatistiken() {
-    const stats = this.aktuelleStatistiken;
-
-    // Anzahl Mitarbeiter
-    document.getElementById('statMitarbeiter').textContent = stats.length;
-
-    // Gesamt Urlaub
-    const gesamtUrlaub = stats.reduce((sum, s) => sum + s.urlaub_genommen, 0);
-    document.getElementById('statUrlaub').textContent = `${gesamtUrlaub.toFixed(1)} Tage`;
-
-    // Gesamt Krank
-    const gesamtKrank = stats.reduce((sum, s) => sum + s.krankheitstage, 0);
-    document.getElementById('statKrank').textContent = `${gesamtKrank.toFixed(1)} Tage`;
-
-    // Gesamt Schulung
-    const gesamtSchulung = stats.reduce((sum, s) => sum + s.schulungstage, 0);
-    document.getElementById('statSchulung').textContent = `${gesamtSchulung.toFixed(1)} Tage`;
-
-    // Gesamt Überstunden
-    const gesamtUeberstunden = stats.reduce((sum, s) => sum + s.ueberstunden, 0);
-    document.getElementById('statUeberstunden').textContent = `${gesamtUeberstunden.toFixed(1)} Std.`;
   }
 
   /**
@@ -152,7 +105,6 @@ class MitarbeiterTabelle {
 
     this.aktuelleStatistiken = stats;
     this.render();
-    this.updateStatistiken();
   }
 }
 

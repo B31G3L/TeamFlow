@@ -167,8 +167,11 @@ class TeamplannerDataManager {
     // Rekursiv: Übertrag vom Vorvorjahr
     const uebertragVorvorjahr = await this.berechneUebertrag(mitarbeiterId, vorjahr);
 
+    // Urlaubsanspruch im Vorjahr (anteilig wenn Eintrittsjahr)
+    const urlaubsanspruchVorjahr = this.berechneAnteiligenUrlaub(mitarbeiter, vorjahr);
+
     // Verfügbar im Vorjahr
-    const verfuegbarVorjahr = mitarbeiter.urlaubstage_jahr + uebertragVorvorjahr;
+    const verfuegbarVorjahr = urlaubsanspruchVorjahr + uebertragVorvorjahr;
 
     // Genommen im Vorjahr
     const genommenVorjahr = await this.getUrlaubSummeNachJahr(mitarbeiterId, vorjahr);
@@ -196,6 +199,34 @@ class TeamplannerDataManager {
   }
 
   /**
+   * Berechnet den anteiligen Urlaubsanspruch im Eintrittsjahr
+   * Ab Folgejahr gilt der volle Anspruch
+   */
+  berechneAnteiligenUrlaub(mitarbeiter, jahr) {
+    const eintrittsdatum = new Date(mitarbeiter.eintrittsdatum);
+    const eintrittsjahr = eintrittsdatum.getFullYear();
+    const urlaubstageJahr = mitarbeiter.urlaubstage_jahr;
+
+    // Volles Jahr wenn nicht Eintrittsjahr
+    if (jahr !== eintrittsjahr) {
+      return urlaubstageJahr;
+    }
+
+    // Im Eintrittsjahr: Anteilig berechnen
+    // Eintrittsmonat zählt voll mit (Januar = 1, Dezember = 12)
+    const eintrittsmonat = eintrittsdatum.getMonth() + 1; // 0-basiert -> 1-basiert
+    
+    // Anzahl der verbleibenden Monate (inkl. Eintrittsmonat)
+    const verbleibendeMonate = 12 - eintrittsmonat + 1;
+    
+    // Anteiliger Urlaub = Jahresurlaub / 12 * verbleibende Monate
+    const anteiligerUrlaub = (urlaubstageJahr / 12) * verbleibendeMonate;
+    
+    // Auf 0.5 Tage runden
+    return Math.round(anteiligerUrlaub * 2) / 2;
+  }
+
+  /**
    * Gibt Statistik für einen Mitarbeiter zurück
    */
   async getMitarbeiterStatistik(mitarbeiterId) {
@@ -210,6 +241,9 @@ class TeamplannerDataManager {
 
     // Übertrag berechnen
     const uebertrag = await this.berechneUebertrag(mitarbeiterId, this.aktuellesJahr);
+
+    // Anteiligen Urlaubsanspruch berechnen (nur im Eintrittsjahr relevant)
+    const urlaubsanspruch = this.berechneAnteiligenUrlaub(mitarbeiter, this.aktuellesJahr);
 
     // Urlaub genommen
     const urlaubGenommen = await this.getUrlaubSummeNachJahr(mitarbeiterId, this.aktuellesJahr);
@@ -240,10 +274,11 @@ class TeamplannerDataManager {
 
     return {
       mitarbeiter,
+      urlaubsanspruch: urlaubsanspruch, // Anteilig im Eintrittsjahr
       uebertrag_vorjahr: uebertrag,
-      urlaub_verfuegbar: mitarbeiter.urlaubstage_jahr + uebertrag,
+      urlaub_verfuegbar: urlaubsanspruch + uebertrag,
       urlaub_genommen: urlaubGenommen,
-      urlaub_rest: mitarbeiter.urlaubstage_jahr + uebertrag - urlaubGenommen,
+      urlaub_rest: urlaubsanspruch + uebertrag - urlaubGenommen,
       krankheitstage: krankheit.summe,
       schulungstage: schulung.summe,
       ueberstunden: ueberstunden.summe

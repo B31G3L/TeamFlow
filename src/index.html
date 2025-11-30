@@ -100,17 +100,17 @@
   </nav>
 
   <!-- Main Content -->
-  <main class="container-fluid py-4">
+  <main class="main-content">
     <!-- Toolbar -->
-    <div class="row mb-3">
+    <div class="toolbar">
       <!-- Suchfeld -->
-      <div class="col-md-4">
+      <div class="toolbar-item">
         <input type="text" id="suchfeld" class="form-control" 
                placeholder="🔍 Suche nach Name oder Abteilung...">
       </div>
 
       <!-- Abteilungs-Filter -->
-      <div class="col-md-3">
+      <div class="toolbar-item">
         <select id="abteilungFilter" class="form-select">
           <option value="Alle">Alle Abteilungen</option>
           <!-- Wird dynamisch gefüllt -->
@@ -118,7 +118,7 @@
       </div>
 
       <!-- Buttons -->
-      <div class="col-md-5 text-end">
+      <div class="toolbar-item toolbar-right">
         <button class="btn btn-outline-secondary" id="btnAktualisieren" title="Aktualisieren">
           <i class="bi bi-arrow-clockwise"></i>
         </button>
@@ -126,60 +126,28 @@
     </div>
 
     <!-- Mitarbeiter-Tabelle -->
-    <div class="card shadow-sm">
-      <div class="card-body p-0">
-        <div class="table-responsive">
-          <table class="table table-hover table-striped mb-0" id="mitarbeiterTabelle">
-            <thead class="table-dark sticky-top">
-              <tr>
-                <th>Nr.</th>
-                <th>Name</th>
-                <th>Abteilung</th>
-                <th>Anspruch</th>
-                <th>Übertrag</th>
-                <th>Verfügbar</th>
-                <th>Genommen</th>
-                <th>Rest</th>
-                <th>Krank</th>
-                <th>Schulung</th>
-                <th>Überstunden</th>
-                <th>Aktionen</th>
-              </tr>
-            </thead>
-            <tbody id="mitarbeiterTabelleBody">
-              <!-- Wird dynamisch gefüllt -->
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <!-- Statistik-Footer -->
-      <div class="card-footer bg-dark">
-        <div class="row text-center">
-          <div class="col">
-            <small class="text-muted d-block">Mitarbeiter</small>
-            <div class="h5 mb-0" id="statMitarbeiter">0</div>
-          </div>
-          <div class="col">
-            <small class="text-muted d-block">Urlaub</small>
-            <div class="h5 mb-0 text-success" id="statUrlaub">0 Tage</div>
-          </div>
-          <div class="col">
-            <small class="text-muted d-block">Krank</small>
-            <div class="h5 mb-0 text-danger" id="statKrank">0 Tage</div>
-          </div>
-          <div class="col">
-            <small class="text-muted d-block">Schulung</small>
-            <div class="h5 mb-0 text-info" id="statSchulung">0 Tage</div>
-          </div>
-          <div class="col">
-            <small class="text-muted d-block">Überstunden</small>
-            <div class="h5 mb-0 text-warning" id="statUeberstunden">0 Std.</div>
-          </div>
-        </div>
-      </div>
+    <div class="table-container">
+      <table class="table table-hover table-striped mb-0" id="mitarbeiterTabelle">
+        <thead class="table-dark sticky-top">
+          <tr>
+            <th>Nr.</th>
+            <th>Name</th>
+            <th>Abteilung</th>
+            <th>Anspruch</th>
+            <th>Übertrag</th>
+            <th>Verfügbar</th>
+            <th>Genommen</th>
+            <th>Rest</th>
+            <th>Krank</th>
+            <th>Schulung</th>
+            <th>Überstunden</th>
+          </tr>
+        </thead>
+        <tbody id="mitarbeiterTabelleBody">
+          <!-- Wird dynamisch gefüllt -->
+        </tbody>
+      </table>
     </div>
-
   </main>
 
   <!-- Notification Toast Container -->
