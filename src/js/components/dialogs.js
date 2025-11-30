@@ -756,6 +756,9 @@ class DialogManager {
    * Zeigt Urlaub Eintragen Dialog
    */
   async zeigeUrlaubDialog(mitarbeiterId, callback) {
+    const heute = new Date();
+    const formatDate = (date) => date.toISOString().split('T')[0];
+
     const modalHtml = `
       <div class="modal fade" id="urlaubModal" tabindex="-1">
         <div class="modal-dialog">
@@ -768,19 +771,35 @@ class DialogManager {
             </div>
             <div class="modal-body">
               <form id="urlaubForm">
-                <div class="mb-3">
-                  <label class="form-label">Von Datum *</label>
-                  <input type="date" class="form-control" id="vonDatum" required>
+                <div class="row">
+                  <div class="col-md-6 mb-3">
+                    <label class="form-label">Von *</label>
+                    <input type="date" class="form-control" id="vonDatum" value="${formatDate(heute)}" required>
+                  </div>
+                  <div class="col-md-6 mb-3">
+                    <label class="form-label">Bis *</label>
+                    <input type="date" class="form-control" id="bisDatum" value="${formatDate(heute)}" required>
+                  </div>
                 </div>
 
                 <div class="mb-3">
-                  <label class="form-label">Anzahl Tage *</label>
-                  <input type="number" class="form-control" id="tage" min="0.5" step="0.5" value="1" required>
+                  <label class="form-label">Dauer (Tage): <span id="dauerAnzeige" class="fw-bold">1</span></label>
+                  <div class="mt-2">
+                    <small class="text-muted d-block mb-1">Schnellauswahl:</small>
+                    <div class="d-flex gap-2 flex-wrap">
+                      <button type="button" class="btn btn-sm btn-outline-success dauer-btn" data-tage="0.5">Halber Tag</button>
+                      <button type="button" class="btn btn-sm btn-outline-success dauer-btn" data-tage="1">1 Tag</button>
+                      <button type="button" class="btn btn-sm btn-outline-success dauer-btn" data-tage="2">2 Tage</button>
+                      <button type="button" class="btn btn-sm btn-outline-success dauer-btn" data-tage="3">3 Tage</button>
+                      <button type="button" class="btn btn-sm btn-outline-success dauer-btn" data-tage="5">1 Woche</button>
+                      <button type="button" class="btn btn-sm btn-outline-success dauer-btn" data-tage="10">2 Wochen</button>
+                    </div>
+                  </div>
                 </div>
 
                 <div class="mb-3">
-                  <label class="form-label">Notiz</label>
-                  <textarea class="form-control" id="notiz" rows="3"></textarea>
+                  <label class="form-label">Notizen</label>
+                  <textarea class="form-control" id="notiz" rows="2" placeholder="Optionale Notizen..."></textarea>
                 </div>
               </form>
             </div>
@@ -802,11 +821,24 @@ class DialogManager {
         return false;
       }
 
+      const vonDatum = document.getElementById('vonDatum').value;
+      const bisDatum = document.getElementById('bisDatum').value;
+
+      // Berechne Tage
+      const von = new Date(vonDatum);
+      const bis = new Date(bisDatum);
+      const diffTime = bis - von;
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+      
+      // Prüfe ob halber Tag ausgewählt
+      const dauerAnzeige = document.getElementById('dauerAnzeige').textContent;
+      const tage = dauerAnzeige === '0.5' ? 0.5 : diffDays;
+
       const eintrag = {
         typ: 'urlaub',
         mitarbeiter_id: mitarbeiterId,
-        datum: document.getElementById('vonDatum').value,
-        wert: parseFloat(document.getElementById('tage').value),
+        datum: vonDatum,
+        wert: tage,
         beschreibung: document.getElementById('notiz').value || null
       };
 
@@ -820,6 +852,61 @@ class DialogManager {
         return false;
       }
     });
+
+    // Event-Listener für Datum-Validierung und Dauer-Berechnung
+    setTimeout(() => {
+      const vonDatumInput = document.getElementById('vonDatum');
+      const bisDatumInput = document.getElementById('bisDatum');
+      const dauerAnzeige = document.getElementById('dauerAnzeige');
+
+      const berechneDauer = () => {
+        const von = new Date(vonDatumInput.value);
+        const bis = new Date(bisDatumInput.value);
+        
+        if (bis < von) {
+          bisDatumInput.value = vonDatumInput.value;
+          dauerAnzeige.textContent = '1';
+        } else {
+          const diffTime = bis - von;
+          const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+          dauerAnzeige.textContent = diffDays;
+        }
+      };
+
+      vonDatumInput.addEventListener('change', () => {
+        // Bis-Datum mindestens Von-Datum
+        if (bisDatumInput.value < vonDatumInput.value) {
+          bisDatumInput.value = vonDatumInput.value;
+        }
+        bisDatumInput.min = vonDatumInput.value;
+        berechneDauer();
+      });
+
+      bisDatumInput.addEventListener('change', berechneDauer);
+
+      // Setze initiales min für Bis-Datum
+      bisDatumInput.min = vonDatumInput.value;
+
+      // Dauer-Buttons
+      document.querySelectorAll('.dauer-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const tage = parseFloat(btn.dataset.tage);
+          const von = new Date(vonDatumInput.value);
+          
+          if (tage === 0.5) {
+            // Halber Tag: Von und Bis gleich, aber Dauer 0.5
+            bisDatumInput.value = vonDatumInput.value;
+            dauerAnzeige.textContent = '0.5';
+          } else {
+            // Berechne Bis-Datum basierend auf Tagen
+            const bis = new Date(von);
+            bis.setDate(bis.getDate() + tage - 1);
+            bisDatumInput.value = bis.toISOString().split('T')[0];
+            dauerAnzeige.textContent = tage;
+          }
+        });
+      });
+    }, 100);
   }
 
   /**
