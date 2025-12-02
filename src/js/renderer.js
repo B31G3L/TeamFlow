@@ -123,12 +123,16 @@ async function initUI() {
 
   document.getElementById('menuFeiertageVerwalten').addEventListener('click', (e) => {
     e.preventDefault();
-    showNotification('Info', 'Diese Funktion ist noch nicht implementiert', 'info');
+    dialogManager.zeigeFeiertagVerwalten(async () => {
+      await loadData();
+    });
   });
 
   document.getElementById('menuVeranstaltungenVerwalten').addEventListener('click', (e) => {
     e.preventDefault();
-    showNotification('Info', 'Diese Funktion ist noch nicht implementiert', 'info');
+    dialogManager.zeigeVeranstaltungVerwalten(async () => {
+      await loadData();
+    });
   });
 
   document.getElementById('menuExportCSV').addEventListener('click', (e) => {
