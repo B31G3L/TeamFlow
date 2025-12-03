@@ -1,6 +1,10 @@
 /**
  * Urlaub-Dialog
  * Urlaub eintragen mit Feiertags-Berücksichtigung
+ * 
+ * FIXES:
+ * - Race Condition bei Event-Listener Initialisierung behoben
+ * - Bessere Fehlerbehandlung
  */
 
 class UrlaubDialog extends DialogBase {
@@ -80,6 +84,7 @@ class UrlaubDialog extends DialogBase {
       </div>
     `;
 
+    // FIX: showModal gibt jetzt ein Promise zurück, das nach Modal-Animation resolved
     await this.showModal(modalHtml, async () => {
       const form = document.getElementById('urlaubForm');
       if (!form.checkValidity()) {
@@ -90,6 +95,11 @@ class UrlaubDialog extends DialogBase {
       const vonDatum = document.getElementById('vonDatum').value;
       const dauerAnzeige = document.getElementById('dauerAnzeige').textContent;
       const tage = parseFloat(dauerAnzeige);
+
+      if (isNaN(tage) || tage <= 0) {
+        showNotification('Fehler', 'Ungültige Anzahl Urlaubstage', 'danger');
+        return false;
+      }
 
       const eintrag = {
         typ: 'urlaub',
@@ -110,69 +120,97 @@ class UrlaubDialog extends DialogBase {
       }
     });
 
-    // Event-Listener für Datum-Validierung und Dauer-Berechnung
-    setTimeout(async () => {
-      const vonDatumInput = document.getElementById('vonDatum');
-      const bisDatumInput = document.getElementById('bisDatum');
-      const dauerAnzeige = document.getElementById('dauerAnzeige');
-      const feiertagsHinweiseDiv = document.getElementById('feiertagsHinweise');
-      const kollegenHinweiseDiv = document.getElementById('kollegenHinweise');
-      const veranstaltungsHinweiseDiv = document.getElementById('veranstaltungsHinweise');
+    // FIX: Event-Listener nach Modal-Animation initialisieren (Promise-basiert statt setTimeout)
+    await this._initUrlaubEventListener(mitarbeiterId);
+  }
 
-      const aktualisiereHinweise = async () => {
-        const von = vonDatumInput.value;
-        const bis = bisDatumInput.value;
-        
-        if (new Date(bis) < new Date(von)) {
-          bisDatumInput.value = von;
-          dauerAnzeige.textContent = '1';
-          feiertagsHinweiseDiv.innerHTML = '';
-          return;
-        }
-        
+  /**
+   * Initialisiert Event-Listener für Urlaub-Dialog
+   * FIX: Separate Methode für bessere Testbarkeit und Fehlerbehandlung
+   */
+  async _initUrlaubEventListener(mitarbeiterId) {
+    const vonDatumInput = document.getElementById('vonDatum');
+    const bisDatumInput = document.getElementById('bisDatum');
+    const dauerAnzeige = document.getElementById('dauerAnzeige');
+    const feiertagsHinweiseDiv = document.getElementById('feiertagsHinweise');
+    const kollegenHinweiseDiv = document.getElementById('kollegenHinweise');
+    const veranstaltungsHinweiseDiv = document.getElementById('veranstaltungsHinweise');
+
+    // FIX: Prüfe ob Elemente existieren
+    if (!vonDatumInput || !bisDatumInput || !dauerAnzeige) {
+      console.warn('Urlaub-Dialog Elemente nicht gefunden');
+      return;
+    }
+
+    const aktualisiereHinweise = async () => {
+      const von = vonDatumInput.value;
+      const bis = bisDatumInput.value;
+      
+      if (!von || !bis) return;
+
+      if (new Date(bis) < new Date(von)) {
+        bisDatumInput.value = von;
+        dauerAnzeige.textContent = '1';
+        if (feiertagsHinweiseDiv) feiertagsHinweiseDiv.innerHTML = '';
+        return;
+      }
+      
+      try {
         // Berechne Arbeitstage MIT Feiertagen (async)
         const arbeitstage = await berechneArbeitstageAsync(von, bis);
         dauerAnzeige.textContent = arbeitstage;
 
         // Hole Feiertage im Zeitraum für Anzeige
-        const feiertage = await getFeiertageImZeitraum(von, bis);
-        feiertagsHinweiseDiv.innerHTML = this.erstelleFeiertagsHinweisHTML(feiertage);
+        if (feiertagsHinweiseDiv) {
+          const feiertage = await getFeiertageImZeitraum(von, bis);
+          feiertagsHinweiseDiv.innerHTML = this.erstelleFeiertagsHinweisHTML(feiertage);
+        }
 
         // Prüfe Veranstaltungen
-        const veranstaltungen = await this.pruefeVeranstaltungen(von, bis);
-        veranstaltungsHinweiseDiv.innerHTML = this.erstelleVeranstaltungsHinweisHTML(veranstaltungen);
+        if (veranstaltungsHinweiseDiv) {
+          const veranstaltungen = await this.pruefeVeranstaltungen(von, bis);
+          veranstaltungsHinweiseDiv.innerHTML = this.erstelleVeranstaltungsHinweisHTML(veranstaltungen);
+        }
 
         // Prüfe Kollegen-Abwesenheiten
-        const abwesenheiten = await this.pruefeKollegenAbwesenheiten(mitarbeiterId, von, bis, 'urlaub');
-        kollegenHinweiseDiv.innerHTML = this.erstelleKollegenHinweisHTML(abwesenheiten);
-      };
-
-      vonDatumInput.addEventListener('change', async () => {
-        if (bisDatumInput.value < vonDatumInput.value) {
-          bisDatumInput.value = vonDatumInput.value;
+        if (kollegenHinweiseDiv) {
+          const abwesenheiten = await this.pruefeKollegenAbwesenheiten(mitarbeiterId, von, bis, 'urlaub');
+          kollegenHinweiseDiv.innerHTML = this.erstelleKollegenHinweisHTML(abwesenheiten);
         }
-        bisDatumInput.min = vonDatumInput.value;
-        await aktualisiereHinweise();
-      });
+      } catch (error) {
+        console.error('Fehler beim Aktualisieren der Hinweise:', error);
+      }
+    };
 
-      bisDatumInput.addEventListener('change', aktualisiereHinweise);
-
-      // Setze initiales min für Bis-Datum
+    vonDatumInput.addEventListener('change', async () => {
+      if (bisDatumInput.value < vonDatumInput.value) {
+        bisDatumInput.value = vonDatumInput.value;
+      }
       bisDatumInput.min = vonDatumInput.value;
-
-      // Initial prüfen
       await aktualisiereHinweise();
+    });
 
-      // Dauer-Buttons - jetzt mit async Feiertags-Berechnung
-      document.querySelectorAll('.dauer-btn').forEach(btn => {
-        btn.addEventListener('click', async () => {
-          const tage = parseFloat(btn.dataset.tage);
-          const von = vonDatumInput.value;
-          
+    bisDatumInput.addEventListener('change', aktualisiereHinweise);
+
+    // Setze initiales min für Bis-Datum
+    bisDatumInput.min = vonDatumInput.value;
+
+    // Initial prüfen
+    await aktualisiereHinweise();
+
+    // Dauer-Buttons - jetzt mit async Feiertags-Berechnung
+    document.querySelectorAll('.dauer-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const tage = parseFloat(btn.dataset.tage);
+        const von = vonDatumInput.value;
+        
+        if (!von) return;
+
+        try {
           if (tage === 0.5) {
             bisDatumInput.value = von;
             dauerAnzeige.textContent = '0.5';
-            feiertagsHinweiseDiv.innerHTML = '';
+            if (feiertagsHinweiseDiv) feiertagsHinweiseDiv.innerHTML = '';
           } else {
             // Berechne Enddatum MIT Feiertagen
             const bis = await berechneEndDatumNachArbeitstagenAsync(von, tage);
@@ -183,24 +221,32 @@ class UrlaubDialog extends DialogBase {
             dauerAnzeige.textContent = arbeitstage;
             
             // Hole Feiertage im Zeitraum
-            const feiertage = await getFeiertageImZeitraum(von, bis);
-            feiertagsHinweiseDiv.innerHTML = this.erstelleFeiertagsHinweisHTML(feiertage);
+            if (feiertagsHinweiseDiv) {
+              const feiertage = await getFeiertageImZeitraum(von, bis);
+              feiertagsHinweiseDiv.innerHTML = this.erstelleFeiertagsHinweisHTML(feiertage);
+            }
           }
 
           // Aktualisiere Hinweise nach Änderung
-          const veranstaltungen = await this.pruefeVeranstaltungen(vonDatumInput.value, bisDatumInput.value);
-          veranstaltungsHinweiseDiv.innerHTML = this.erstelleVeranstaltungsHinweisHTML(veranstaltungen);
+          if (veranstaltungsHinweiseDiv) {
+            const veranstaltungen = await this.pruefeVeranstaltungen(vonDatumInput.value, bisDatumInput.value);
+            veranstaltungsHinweiseDiv.innerHTML = this.erstelleVeranstaltungsHinweisHTML(veranstaltungen);
+          }
 
-          const abwesenheiten = await this.pruefeKollegenAbwesenheiten(
-            mitarbeiterId, 
-            vonDatumInput.value, 
-            bisDatumInput.value, 
-            'urlaub'
-          );
-          kollegenHinweiseDiv.innerHTML = this.erstelleKollegenHinweisHTML(abwesenheiten);
-        });
+          if (kollegenHinweiseDiv) {
+            const abwesenheiten = await this.pruefeKollegenAbwesenheiten(
+              mitarbeiterId, 
+              vonDatumInput.value, 
+              bisDatumInput.value, 
+              'urlaub'
+            );
+            kollegenHinweiseDiv.innerHTML = this.erstelleKollegenHinweisHTML(abwesenheiten);
+          }
+        } catch (error) {
+          console.error('Fehler bei Dauer-Button:', error);
+        }
       });
-    }, 100);
+    });
   }
 }
 

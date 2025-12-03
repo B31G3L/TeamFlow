@@ -1,6 +1,11 @@
 /**
  * Dialog-Basis-Klasse und Hilfsfunktionen
  * Gemeinsame Funktionalität für alle Dialoge
+ * 
+ * FIXES:
+ * - Korrekte Behandlung von db.query() Rückgabewerten
+ * - Verbesserte Fehlerbehandlung
+ * - Race Condition bei Dialog-Initialisierung behoben
  */
 
 // Globaler Cache für Feiertage (wird beim ersten Aufruf geladen)
@@ -212,6 +217,11 @@ function showNotification(title, message, type = 'info') {
   const toastTitle = document.getElementById('toastTitle');
   const toastMessage = document.getElementById('toastMessage');
 
+  if (!toast || !toastTitle || !toastMessage) {
+    console.warn('Toast-Elemente nicht gefunden:', { title, message, type });
+    return;
+  }
+
   const icons = {
     success: 'bi-check-circle-fill',
     danger: 'bi-exclamation-triangle-fill',
@@ -241,25 +251,37 @@ class DialogBase {
 
   /**
    * Prüft ob Veranstaltungen im Zeitraum liegen
+   * FIX: Korrekte Behandlung des db.query() Rückgabewerts
    */
   async pruefeVeranstaltungen(vonDatum, bisDatum) {
-    const veranstaltungen = await this.dataManager.db.query(`
-      SELECT titel, von_datum, bis_datum
-      FROM veranstaltungen
-      WHERE (von_datum BETWEEN ? AND ?) 
-         OR (bis_datum BETWEEN ? AND ?) 
-         OR (von_datum <= ? AND bis_datum >= ?)
-      ORDER BY von_datum
-    `, [vonDatum, bisDatum, vonDatum, bisDatum, vonDatum, bisDatum]);
+    try {
+      const result = await this.dataManager.db.query(`
+        SELECT titel, von_datum, bis_datum
+        FROM veranstaltungen
+        WHERE (von_datum BETWEEN ? AND ?) 
+           OR (bis_datum BETWEEN ? AND ?) 
+           OR (von_datum <= ? AND bis_datum >= ?)
+        ORDER BY von_datum
+      `, [vonDatum, bisDatum, vonDatum, bisDatum, vonDatum, bisDatum]);
 
-    return veranstaltungen;
+      // FIX: result ist ein Objekt mit {success, data} oder {success, error}
+      if (!result.success) {
+        console.error('Fehler beim Prüfen der Veranstaltungen:', result.error);
+        return [];
+      }
+
+      return result.data || [];
+    } catch (error) {
+      console.error('Fehler beim Prüfen der Veranstaltungen:', error);
+      return [];
+    }
   }
 
   /**
    * Erstellt HTML für Veranstaltungs-Hinweise
    */
   erstelleVeranstaltungsHinweisHTML(veranstaltungen) {
-    if (veranstaltungen.length === 0) {
+    if (!veranstaltungen || veranstaltungen.length === 0) {
       return '';
     }
 
@@ -297,7 +319,7 @@ class DialogBase {
    * Erstellt HTML für Feiertags-Hinweise
    */
   erstelleFeiertagsHinweisHTML(feiertage) {
-    if (feiertage.length === 0) {
+    if (!feiertage || feiertage.length === 0) {
       return '';
     }
 
@@ -332,101 +354,114 @@ class DialogBase {
 
   /**
    * Prüft Kollegen-Abwesenheiten in der gleichen Abteilung
+   * FIX: Korrekte Behandlung aller db.query() Rückgabewerte
    */
   async pruefeKollegenAbwesenheiten(mitarbeiterId, vonDatum, bisDatum, typ) {
-    const mitarbeiter = await this.dataManager.getMitarbeiter(mitarbeiterId);
-    if (!mitarbeiter) return [];
+    try {
+      const mitarbeiter = await this.dataManager.getMitarbeiter(mitarbeiterId);
+      if (!mitarbeiter) return [];
 
-    const abteilungId = mitarbeiter.abteilung_id;
+      const abteilungId = mitarbeiter.abteilung_id;
 
-    const kollegen = await this.dataManager.db.query(`
-      SELECT id, vorname, nachname
-      FROM mitarbeiter
-      WHERE abteilung_id = ? AND id != ? AND status = 'AKTIV'
-    `, [abteilungId, mitarbeiterId]);
+      // FIX: Korrekte Extraktion der Daten
+      const kollegenResult = await this.dataManager.db.query(`
+        SELECT id, vorname, nachname
+        FROM mitarbeiter
+        WHERE abteilung_id = ? AND id != ? AND status = 'AKTIV'
+      `, [abteilungId, mitarbeiterId]);
 
-    const abwesenheiten = [];
-
-    for (const kollege of kollegen) {
-      // Prüfe Urlaub
-      const urlaub = await this.dataManager.db.query(`
-        SELECT von_datum, bis_datum, tage
-        FROM urlaub
-        WHERE mitarbeiter_id = ?
-          AND ((von_datum BETWEEN ? AND ?) OR (bis_datum BETWEEN ? AND ?) 
-               OR (von_datum <= ? AND bis_datum >= ?))
-      `, [kollege.id, vonDatum, bisDatum, vonDatum, bisDatum, vonDatum, bisDatum]);
-
-      if (urlaub.length > 0) {
-        urlaub.forEach(u => {
-          abwesenheiten.push({
-            name: `${kollege.vorname} ${kollege.nachname}`,
-            typ: 'Urlaub',
-            von: u.von_datum,
-            bis: u.bis_datum,
-            tage: u.tage,
-            klasse: 'text-success'
-          });
-        });
+      if (!kollegenResult.success) {
+        console.error('Fehler beim Laden der Kollegen:', kollegenResult.error);
+        return [];
       }
 
-      // Prüfe Krankheit
-      const krankheit = await this.dataManager.db.query(`
-        SELECT von_datum, bis_datum, tage
-        FROM krankheit
-        WHERE mitarbeiter_id = ?
-          AND ((von_datum BETWEEN ? AND ?) OR (bis_datum BETWEEN ? AND ?) 
-               OR (von_datum <= ? AND bis_datum >= ?))
-      `, [kollege.id, vonDatum, bisDatum, vonDatum, bisDatum, vonDatum, bisDatum]);
+      const kollegen = kollegenResult.data || [];
+      const abwesenheiten = [];
 
-      if (krankheit.length > 0) {
-        krankheit.forEach(k => {
-          abwesenheiten.push({
-            name: `${kollege.vorname} ${kollege.nachname}`,
-            typ: 'Krank',
-            von: k.von_datum,
-            bis: k.bis_datum,
-            tage: k.tage,
-            klasse: 'text-danger'
+      for (const kollege of kollegen) {
+        // Prüfe Urlaub - FIX: Korrekte Extraktion
+        const urlaubResult = await this.dataManager.db.query(`
+          SELECT von_datum, bis_datum, tage
+          FROM urlaub
+          WHERE mitarbeiter_id = ?
+            AND ((von_datum BETWEEN ? AND ?) OR (bis_datum BETWEEN ? AND ?) 
+                 OR (von_datum <= ? AND bis_datum >= ?))
+        `, [kollege.id, vonDatum, bisDatum, vonDatum, bisDatum, vonDatum, bisDatum]);
+
+        if (urlaubResult.success && urlaubResult.data) {
+          urlaubResult.data.forEach(u => {
+            abwesenheiten.push({
+              name: `${kollege.vorname} ${kollege.nachname}`,
+              typ: 'Urlaub',
+              von: u.von_datum,
+              bis: u.bis_datum,
+              tage: u.tage,
+              klasse: 'text-success'
+            });
           });
-        });
+        }
+
+        // Prüfe Krankheit - FIX: Korrekte Extraktion
+        const krankheitResult = await this.dataManager.db.query(`
+          SELECT von_datum, bis_datum, tage
+          FROM krankheit
+          WHERE mitarbeiter_id = ?
+            AND ((von_datum BETWEEN ? AND ?) OR (bis_datum BETWEEN ? AND ?) 
+                 OR (von_datum <= ? AND bis_datum >= ?))
+        `, [kollege.id, vonDatum, bisDatum, vonDatum, bisDatum, vonDatum, bisDatum]);
+
+        if (krankheitResult.success && krankheitResult.data) {
+          krankheitResult.data.forEach(k => {
+            abwesenheiten.push({
+              name: `${kollege.vorname} ${kollege.nachname}`,
+              typ: 'Krank',
+              von: k.von_datum,
+              bis: k.bis_datum,
+              tage: k.tage,
+              klasse: 'text-danger'
+            });
+          });
+        }
+
+        // Prüfe Schulung - FIX: Korrekte Extraktion
+        const schulungResult = await this.dataManager.db.query(`
+          SELECT datum, dauer_tage, titel
+          FROM schulung
+          WHERE mitarbeiter_id = ?
+            AND datum BETWEEN ? AND ?
+        `, [kollege.id, vonDatum, bisDatum]);
+
+        if (schulungResult.success && schulungResult.data) {
+          schulungResult.data.forEach(s => {
+            const start = new Date(s.datum);
+            const end = new Date(start);
+            end.setDate(end.getDate() + Math.floor(s.dauer_tage) - 1);
+
+            abwesenheiten.push({
+              name: `${kollege.vorname} ${kollege.nachname}`,
+              typ: 'Schulung',
+              von: s.datum,
+              bis: end.toISOString().split('T')[0],
+              tage: s.dauer_tage,
+              titel: s.titel,
+              klasse: 'text-info'
+            });
+          });
+        }
       }
 
-      // Prüfe Schulung
-      const schulung = await this.dataManager.db.query(`
-        SELECT datum, dauer_tage, titel
-        FROM schulung
-        WHERE mitarbeiter_id = ?
-          AND datum BETWEEN ? AND ?
-      `, [kollege.id, vonDatum, bisDatum]);
-
-      if (schulung.length > 0) {
-        schulung.forEach(s => {
-          const start = new Date(s.datum);
-          const end = new Date(start);
-          end.setDate(end.getDate() + Math.floor(s.dauer_tage) - 1);
-
-          abwesenheiten.push({
-            name: `${kollege.vorname} ${kollege.nachname}`,
-            typ: 'Schulung',
-            von: s.datum,
-            bis: end.toISOString().split('T')[0],
-            tage: s.dauer_tage,
-            titel: s.titel,
-            klasse: 'text-info'
-          });
-        });
-      }
+      return abwesenheiten;
+    } catch (error) {
+      console.error('Fehler beim Prüfen der Kollegen-Abwesenheiten:', error);
+      return [];
     }
-
-    return abwesenheiten;
   }
 
   /**
    * Erstellt HTML für Kollegen-Hinweise
    */
   erstelleKollegenHinweisHTML(abwesenheiten) {
-    if (abwesenheiten.length === 0) {
+    if (!abwesenheiten || abwesenheiten.length === 0) {
       return `
         <div class="alert alert-success" role="alert">
           <i class="bi bi-check-circle"></i> <strong>Keine Überschneidungen:</strong> 
@@ -465,25 +500,55 @@ class DialogBase {
 
   /**
    * Hilfsfunktion: Zeigt Modal an
+   * FIX: Robustere Initialisierung ohne setTimeout Race Condition
    */
   async showModal(html, onSave) {
     // Entferne alte Modals
     const oldModals = document.querySelectorAll('.modal');
-    oldModals.forEach(m => m.remove());
+    oldModals.forEach(m => {
+      // Versuche Modal ordentlich zu schließen
+      const existingModal = bootstrap.Modal.getInstance(m);
+      if (existingModal) {
+        existingModal.dispose();
+      }
+      m.remove();
+    });
+
+    // Entferne alte Backdrops
+    const oldBackdrops = document.querySelectorAll('.modal-backdrop');
+    oldBackdrops.forEach(b => b.remove());
 
     // Füge neues Modal hinzu
     document.body.insertAdjacentHTML('beforeend', html);
 
     // Modal initialisieren
     const modalElement = document.querySelector('.modal');
+    if (!modalElement) {
+      console.error('Modal-Element nicht gefunden');
+      return;
+    }
+
     const modal = new bootstrap.Modal(modalElement);
 
     // Speichern-Button
     const btnSpeichern = modalElement.querySelector('#btnSpeichern');
     if (btnSpeichern && onSave) {
       btnSpeichern.addEventListener('click', async () => {
-        if (await onSave()) {
-          modal.hide();
+        // Deaktiviere Button während des Speicherns
+        btnSpeichern.disabled = true;
+        btnSpeichern.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Speichern...';
+        
+        try {
+          if (await onSave()) {
+            modal.hide();
+          }
+        } catch (error) {
+          console.error('Fehler beim Speichern:', error);
+          showNotification('Fehler', error.message, 'danger');
+        } finally {
+          // Button wieder aktivieren
+          btnSpeichern.disabled = false;
+          btnSpeichern.innerHTML = '<i class="bi bi-check-lg"></i> Speichern';
         }
       });
     }
@@ -493,12 +558,29 @@ class DialogBase {
 
     // Cleanup nach Schließen
     modalElement.addEventListener('hidden.bs.modal', () => {
+      modal.dispose();
       modalElement.remove();
+    });
+
+    // FIX: Warte auf Modal-Animation bevor Promise resolved
+    return new Promise(resolve => {
+      modalElement.addEventListener('shown.bs.modal', () => {
+        resolve(modal);
+      }, { once: true });
     });
   }
 }
 
 // Export für Node.js
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { DialogBase, showNotification, berechneArbeitstage, berechneArbeitstageAsync, berechneEndDatumNachArbeitstagen, berechneEndDatumNachArbeitstagenAsync, getFeiertageImZeitraum, invalidiereFeiertageCache };
+  module.exports = { 
+    DialogBase, 
+    showNotification, 
+    berechneArbeitstage, 
+    berechneArbeitstageAsync, 
+    berechneEndDatumNachArbeitstagen, 
+    berechneEndDatumNachArbeitstagenAsync, 
+    getFeiertageImZeitraum, 
+    invalidiereFeiertageCache 
+  };
 }

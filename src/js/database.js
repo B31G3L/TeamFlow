@@ -1,6 +1,10 @@
 /**
  * Teamplanner Database Layer (Renderer)
  * IPC Wrapper für Datenbank-Kommunikation mit Main Process
+ * 
+ * FIXES:
+ * - Verbesserte Fehlerbehandlung
+ * - Konsistente Rückgabewerte
  */
 
 class TeamplannerDatabase {
@@ -15,62 +19,95 @@ class TeamplannerDatabase {
 
   /**
    * Führt Query aus und gibt alle Ergebnisse zurück
+   * FIX: Gibt immer ein konsistentes Objekt zurück
    */
   async query(sql, params = []) {
-    const result = await this.api.query(sql, params);
-    if (!result.success) {
-      throw new Error(result.error);
+    try {
+      const result = await this.api.query(sql, params);
+      if (!result.success) {
+        console.error('DB Query Error:', result.error, { sql, params });
+        return { success: false, error: result.error, data: [] };
+      }
+      return { success: true, data: result.data || [] };
+    } catch (error) {
+      console.error('DB Query Exception:', error, { sql, params });
+      return { success: false, error: error.message, data: [] };
     }
-    return result.data;
   }
 
   /**
    * Führt Query aus und gibt erstes Ergebnis zurück
+   * FIX: Gibt immer ein konsistentes Objekt zurück
    */
   async get(sql, params = []) {
-    const result = await this.api.get(sql, params);
-    if (!result.success) {
-      throw new Error(result.error);
+    try {
+      const result = await this.api.get(sql, params);
+      if (!result.success) {
+        console.error('DB Get Error:', result.error, { sql, params });
+        return { success: false, error: result.error, data: null };
+      }
+      return { success: true, data: result.data || null };
+    } catch (error) {
+      console.error('DB Get Exception:', error, { sql, params });
+      return { success: false, error: error.message, data: null };
     }
-    return result.data;
   }
 
   /**
    * Führt INSERT/UPDATE/DELETE aus
+   * FIX: Gibt immer ein konsistentes Objekt zurück mit changes-Info
    */
   async run(sql, params = []) {
-    const result = await this.api.run(sql, params);
-    if (!result.success) {
-      throw new Error(result.error);
+    try {
+      const result = await this.api.run(sql, params);
+      if (!result.success) {
+        console.error('DB Run Error:', result.error, { sql, params });
+        return { success: false, error: result.error, data: null };
+      }
+      return { 
+        success: true, 
+        data: result.data || { changes: 0, lastInsertRowid: null }
+      };
+    } catch (error) {
+      console.error('DB Run Exception:', error, { sql, params });
+      return { success: false, error: error.message, data: null };
     }
-    return result.data;
   }
 
   /**
    * Führt mehrere SQL-Statements aus (kein Prepared Statement)
+   * FIX: Verbesserte Fehlerbehandlung
    */
   async exec(sql) {
-    const result = await this.api.exec(sql);
-    if (!result.success) {
-      throw new Error(result.error);
+    try {
+      const result = await this.api.exec(sql);
+      if (!result.success) {
+        console.error('DB Exec Error:', result.error, { sql });
+        return { success: false, error: result.error };
+      }
+      return { success: true };
+    } catch (error) {
+      console.error('DB Exec Exception:', error, { sql });
+      return { success: false, error: error.message };
     }
-    return true;
   }
 
   /**
    * Gibt Datenbank-Informationen zurück
+   * FIX: Robustere Fehlerbehandlung
    */
   async getDatabaseInfo() {
-    const tables = {
-      mitarbeiter: (await this.get('SELECT COUNT(*) as count FROM mitarbeiter')).count,
-      abteilungen: (await this.get('SELECT COUNT(*) as count FROM abteilungen')).count,
-      urlaub: (await this.get('SELECT COUNT(*) as count FROM urlaub')).count,
-      krankheit: (await this.get('SELECT COUNT(*) as count FROM krankheit')).count,
-      schulung: (await this.get('SELECT COUNT(*) as count FROM schulung')).count,
-      ueberstunden: (await this.get('SELECT COUNT(*) as count FROM ueberstunden')).count,
-      feiertage: (await this.get('SELECT COUNT(*) as count FROM feiertage')).count,
-      veranstaltungen: (await this.get('SELECT COUNT(*) as count FROM veranstaltungen')).count
-    };
+    const tables = {};
+    const tableNames = ['mitarbeiter', 'abteilungen', 'urlaub', 'krankheit', 'schulung', 'ueberstunden', 'feiertage', 'veranstaltungen'];
+
+    for (const tableName of tableNames) {
+      try {
+        const result = await this.get(`SELECT COUNT(*) as count FROM ${tableName}`);
+        tables[tableName] = result.success && result.data ? result.data.count : 0;
+      } catch (error) {
+        tables[tableName] = 0;
+      }
+    }
 
     return {
       path: 'userData/teamplanner_v3.db',

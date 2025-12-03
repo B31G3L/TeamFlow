@@ -1,6 +1,10 @@
 /**
  * Feiertag-Dialog
  * Feiertage hinzufügen, bearbeiten und verwalten
+ * 
+ * FIXES:
+ * - Verbesserte Fehlerbehandlung beim Import von Standard-Feiertagen
+ * - Korrekte db.query() Rückgabewert-Behandlung
  */
 
 class FeiertagDialog extends DialogBase {
@@ -9,11 +13,24 @@ class FeiertagDialog extends DialogBase {
    */
   async zeigeFeiertagVerwalten(callback) {
     const jahr = this.dataManager.aktuellesJahr;
-    const feiertage = await this.dataManager.db.query(`
-      SELECT * FROM feiertage 
-      WHERE strftime('%Y', datum) = ?
-      ORDER BY datum
-    `, [jahr.toString()]);
+    
+    // FIX: Korrekte Extraktion der Daten
+    let feiertage = [];
+    try {
+      const result = await this.dataManager.db.query(`
+        SELECT * FROM feiertage 
+        WHERE strftime('%Y', datum) = ?
+        ORDER BY datum
+      `, [jahr.toString()]);
+      
+      if (result.success) {
+        feiertage = result.data || [];
+      } else {
+        console.error('Fehler beim Laden der Feiertage:', result.error);
+      }
+    } catch (error) {
+      console.error('Fehler beim Laden der Feiertage:', error);
+    }
 
     const feiertagRows = feiertage.map((ft, index) => `
       <tr>
@@ -90,7 +107,11 @@ class FeiertagDialog extends DialogBase {
 
     // Entferne alte Modals
     const oldModals = document.querySelectorAll('.modal');
-    oldModals.forEach(m => m.remove());
+    oldModals.forEach(m => {
+      const existingModal = bootstrap.Modal.getInstance(m);
+      if (existingModal) existingModal.dispose();
+      m.remove();
+    });
 
     document.body.insertAdjacentHTML('beforeend', modalHtml);
 
@@ -107,18 +128,27 @@ class FeiertagDialog extends DialogBase {
     });
 
     // Event-Listener für Standard-Feiertage laden
-    modalElement.querySelector('#btnStandardFeiertage').addEventListener('click', async () => {
+    const btnStandardFeiertage = modalElement.querySelector('#btnStandardFeiertage');
+    btnStandardFeiertage.addEventListener('click', async () => {
       if (confirm(`Möchten Sie die deutschen Feiertage für ${jahr} laden? Bereits vorhandene Feiertage werden nicht überschrieben.`)) {
+        // FIX: Loading-State für Button
+        btnStandardFeiertage.disabled = true;
+        btnStandardFeiertage.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Laden...';
+        
         try {
-          await this.ladeStandardFeiertage(jahr);
+          const result = await this.ladeStandardFeiertage(jahr);
           // Cache invalidieren
           invalidiereFeiertageCache();
-          showNotification('Erfolg', `Deutsche Feiertage für ${jahr} wurden geladen`, 'success');
+          showNotification('Erfolg', `Deutsche Feiertage für ${jahr} wurden geladen (${result.added} hinzugefügt, ${result.skipped} bereits vorhanden)`, 'success');
           modal.hide();
           if (callback) await callback();
           setTimeout(() => this.zeigeFeiertagVerwalten(callback), 300);
         } catch (error) {
-          showNotification('Fehler', error.message, 'danger');
+          console.error('Fehler beim Laden der Standard-Feiertage:', error);
+          showNotification('Fehler', `Feiertage konnten nicht geladen werden: ${error.message}`, 'danger');
+        } finally {
+          btnStandardFeiertage.disabled = false;
+          btnStandardFeiertage.innerHTML = `<i class="bi bi-calendar-check"></i> Deutsche Feiertage ${jahr} laden`;
         }
       }
     });
@@ -144,7 +174,10 @@ class FeiertagDialog extends DialogBase {
 
         if (confirm(`Möchten Sie den Feiertag "${feiertag.name}" wirklich löschen?`)) {
           try {
-            await this.dataManager.db.run('DELETE FROM feiertage WHERE id = ?', [feiertagId]);
+            const result = await this.dataManager.db.run('DELETE FROM feiertage WHERE id = ?', [feiertagId]);
+            if (!result.success) {
+              throw new Error(result.error);
+            }
             // Cache invalidieren
             invalidiereFeiertageCache();
             showNotification('Erfolg', `Feiertag "${feiertag.name}" wurde gelöscht`, 'success');
@@ -161,6 +194,7 @@ class FeiertagDialog extends DialogBase {
     modal.show();
 
     modalElement.addEventListener('hidden.bs.modal', () => {
+      modal.dispose();
       modalElement.remove();
     });
   }
@@ -185,7 +219,7 @@ class FeiertagDialog extends DialogBase {
               <form id="feiertagForm">
                 <div class="mb-3">
                   <label class="form-label">Datum *</label>
-                  <input type="date" class="form-control" id="feiertagDatum" required>
+                  <input type="date" class="form-control" id="feiertagDatum" value="${jahr}-01-01" required>
                 </div>
 
                 <div class="mb-3">
@@ -250,10 +284,17 @@ class FeiertagDialog extends DialogBase {
       };
 
       try {
-        await this.dataManager.db.run(`
+        const result = await this.dataManager.db.run(`
           INSERT INTO feiertage (datum, name, bundesland, beschreibung)
           VALUES (?, ?, ?, ?)
         `, [daten.datum, daten.name, daten.bundesland, daten.beschreibung]);
+
+        if (!result.success) {
+          if (result.error && result.error.includes('UNIQUE')) {
+            throw new Error('An diesem Datum existiert bereits ein Feiertag');
+          }
+          throw new Error(result.error);
+        }
 
         // Cache invalidieren
         invalidiereFeiertageCache();
@@ -262,29 +303,26 @@ class FeiertagDialog extends DialogBase {
         if (callback) await callback();
         return true;
       } catch (error) {
-        if (error.message.includes('UNIQUE')) {
-          showNotification('Fehler', 'An diesem Datum existiert bereits ein Feiertag', 'danger');
-        } else {
-          showNotification('Fehler', error.message, 'danger');
-        }
+        showNotification('Fehler', error.message, 'danger');
         return false;
       }
     });
-
-    // Standard-Datum auf aktuelles Jahr setzen
-    setTimeout(() => {
-      const datumInput = document.getElementById('feiertagDatum');
-      if (datumInput) {
-        datumInput.value = `${jahr}-01-01`;
-      }
-    }, 100);
   }
 
   /**
    * Zeigt Dialog zum Bearbeiten eines Feiertags
    */
   async zeigeFeiertagBearbeiten(feiertagId, callback) {
-    const feiertag = await this.dataManager.db.get('SELECT * FROM feiertage WHERE id = ?', [feiertagId]);
+    // FIX: Korrekte Extraktion
+    let feiertag = null;
+    try {
+      const result = await this.dataManager.db.get('SELECT * FROM feiertage WHERE id = ?', [feiertagId]);
+      if (result.success) {
+        feiertag = result.data;
+      }
+    } catch (error) {
+      console.error('Fehler beim Laden des Feiertags:', error);
+    }
 
     if (!feiertag) {
       showNotification('Fehler', 'Feiertag nicht gefunden', 'danger');
@@ -368,11 +406,15 @@ class FeiertagDialog extends DialogBase {
       };
 
       try {
-        await this.dataManager.db.run(`
+        const result = await this.dataManager.db.run(`
           UPDATE feiertage 
           SET datum = ?, name = ?, bundesland = ?, beschreibung = ?
           WHERE id = ?
         `, [daten.datum, daten.name, daten.bundesland, daten.beschreibung, feiertagId]);
+
+        if (!result.success) {
+          throw new Error(result.error);
+        }
 
         // Cache invalidieren
         invalidiereFeiertageCache();
@@ -411,6 +453,7 @@ class FeiertagDialog extends DialogBase {
 
   /**
    * Lädt deutsche Standard-Feiertage für ein Jahr
+   * FIX: Verbesserte Fehlerbehandlung und Rückgabewert
    */
   async ladeStandardFeiertage(jahr) {
     const ostersonntag = this.berechneOstersonntag(jahr);
@@ -447,17 +490,40 @@ class FeiertagDialog extends DialogBase {
       { datum: formatDatum(11, 1), name: 'Allerheiligen', bundesland: 'NW' },
     ];
 
+    let added = 0;
+    let skipped = 0;
+    const errors = [];
+
     // Feiertage einfügen (ignoriere Duplikate)
     for (const ft of feiertage) {
       try {
-        await this.dataManager.db.run(`
+        const result = await this.dataManager.db.run(`
           INSERT OR IGNORE INTO feiertage (datum, name, bundesland)
           VALUES (?, ?, ?)
         `, [ft.datum, ft.name, ft.bundesland]);
+
+        if (result.success) {
+          // Prüfe ob tatsächlich eingefügt wurde (changes > 0)
+          if (result.data && result.data.changes > 0) {
+            added++;
+          } else {
+            skipped++;
+          }
+        } else {
+          errors.push(`${ft.name}: ${result.error}`);
+          skipped++;
+        }
       } catch (error) {
-        // Ignoriere Duplikate
+        errors.push(`${ft.name}: ${error.message}`);
+        skipped++;
       }
     }
+
+    if (errors.length > 0) {
+      console.warn('Einige Feiertage konnten nicht hinzugefügt werden:', errors);
+    }
+
+    return { added, skipped, errors };
   }
 }
 
