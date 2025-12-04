@@ -1,6 +1,8 @@
 /**
- * Teamplanner - Electron Main Process
+ * Urlaubsplanner - Electron Main Process
  * Verwaltet Fenster, IPC, Datenbank und Systemintegration
+ * 
+ * PORTABLE VERSION: Datenbank liegt neben der .exe
  */
 
 const { app, BrowserWindow, ipcMain, dialog } = require('electron');
@@ -12,18 +14,48 @@ let mainWindow;
 let db;
 
 /**
+ * Ermittelt den Pfad für die Datenbank (neben der .exe)
+ */
+function getDatabasePath() {
+  let basePath;
+  
+  if (app.isPackaged) {
+    // PORTABLE: Datenbank liegt neben der .exe
+    // Bei portable exe: process.env.PORTABLE_EXECUTABLE_DIR zeigt auf den Ordner der .exe
+    // Bei installierter App: app.getPath('exe') zeigt auf die .exe
+    
+    if (process.env.PORTABLE_EXECUTABLE_DIR) {
+      // Portable Version - Umgebungsvariable von electron-builder portable
+      basePath = process.env.PORTABLE_EXECUTABLE_DIR;
+    } else {
+      // Installierte Version oder anderer Fall
+      basePath = path.dirname(app.getPath('exe'));
+    }
+  } else {
+    // Development: Datenbank liegt im Projekt-Root/database
+    basePath = path.join(__dirname, 'database');
+  }
+  
+  // Stelle sicher, dass das Verzeichnis existiert
+  if (!fs.existsSync(basePath)) {
+    fs.mkdirSync(basePath, { recursive: true });
+  }
+  
+  const dbPath = path.join(basePath, 'urlaubsplanner.db');
+  
+  console.log('📂 Datenbank-Pfad:', dbPath);
+  console.log('📦 App ist gepackt:', app.isPackaged);
+  console.log('📍 PORTABLE_EXECUTABLE_DIR:', process.env.PORTABLE_EXECUTABLE_DIR || 'nicht gesetzt');
+  console.log('📍 Exe-Pfad:', app.getPath('exe'));
+  
+  return dbPath;
+}
+
+/**
  * Initialisiert die Datenbank
  */
 function initDatabase() {
-  const userDataPath = app.getPath('userData');
-  const dbPath = path.join(userDataPath, 'teamplanner_v3.db');
-
-  console.log('📂 Datenbank-Pfad:', dbPath);
-
-  // Verzeichnis erstellen falls nicht vorhanden
-  if (!fs.existsSync(userDataPath)) {
-    fs.mkdirSync(userDataPath, { recursive: true });
-  }
+  const dbPath = getDatabasePath();
 
   // Datenbank öffnen
   db = new Database(dbPath);
@@ -280,6 +312,13 @@ ipcMain.handle('app:getPath', async (event, name) => {
 
 ipcMain.handle('app:getVersion', async () => {
   return app.getVersion();
+});
+
+/**
+ * IPC Handler - Datenbank-Pfad (für Info-Anzeige)
+ */
+ipcMain.handle('app:getDatabasePath', async () => {
+  return getDatabasePath();
 });
 
 /**

@@ -1,17 +1,14 @@
 {
-  "name": "teamplanner-electron",
+  "name": "urlaubsplanner-electron",
   "version": "1.0.0",
   "description": "Moderne Desktop-Anwendung zur Verwaltung von Urlaub, Krankheit, Schulungen und Überstunden",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "build": "electron-builder",
-    "build:win": "electron-builder --win",
-    "build:mac": "electron-builder --mac",
-    "build:linux": "electron-builder --linux"
+    "build": "electron-builder --win"
   },
   "keywords": [
-    "teamplanner",
+    "urlaubsplanner",
     "urlaub",
     "verwaltung"
   ],
@@ -28,8 +25,8 @@
     "bootstrap-icons": "^1.11.2"
   },
   "build": {
-    "appId": "com.teamplanner.app",
-    "productName": "Teamplanner",
+    "appId": "com.urlaubsplanner.app",
+    "productName": "Urlaubsplanner",
     "directories": {
       "output": "dist"
     },
@@ -37,20 +34,20 @@
       "main.js",
       "preload.js",
       "src/**/*",
-      "database/**/*"
+      "node_modules/**/*"
     ],
+    "asar": true,
     "win": {
-      "target": "nsis",
-      "icon": "src/assets/logo.ico"
+      "target": [
+        {
+          "target": "portable",
+          "arch": ["x64"]
+        }
+      ],
+      "icon": "src/assets/logo.png"
     },
-    "mac": {
-      "target": "dmg",
-      "icon": "src/assets/logo.icns"
-    },
-    "linux": {
-      "target": "AppImage",
-      "icon": "src/assets/logo.png",
-      "category": "Office"
+    "portable": {
+      "artifactName": "Urlaubsplanner-Portable.${ext}"
     }
   }
 }
