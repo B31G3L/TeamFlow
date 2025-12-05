@@ -64,6 +64,12 @@
             </ul>
           </li>
 
+          <li class="nav-item">
+            <a class="nav-link" href="#" id="menuKalender">
+              <i class="bi bi-calendar3"></i> Kalender
+            </a>
+          </li>
+
           <li class="nav-item dropdown">
             <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
               <i class="bi bi-building"></i> Einstellungen
@@ -119,6 +125,9 @@
 
       <!-- Buttons -->
       <div class="toolbar-item toolbar-right">
+        <button class="btn btn-outline-info me-2" id="btnKalenderToolbar" title="Kalenderansicht">
+          <i class="bi bi-calendar3"></i>
+        </button>
         <button class="btn btn-outline-secondary" id="btnAktualisieren" title="Aktualisieren">
           <i class="bi bi-arrow-clockwise"></i>
         </button>
@@ -181,8 +190,9 @@
   <script src="js/components/ueberstunden-dialog.js"></script>
   <script src="js/components/feiertag-dialog.js"></script>
   <script src="js/components/veranstaltung-dialog.js"></script>
-<script src="js/components/detail-dialog.js"></script>
-<script src="js/components/dialog-manager.js"></script>
+  <script src="js/components/detail-dialog.js"></script>
+  <script src="js/components/kalender-ansicht.js"></script>
+  <script src="js/components/dialog-manager.js"></script>
   
   <script src="js/renderer.js"></script>
 </body>

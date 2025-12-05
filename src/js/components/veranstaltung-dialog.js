@@ -1,6 +1,8 @@
 /**
  * Veranstaltung-Dialog
  * Veranstaltungen hinzufügen, bearbeiten und verwalten
+ * 
+ * FIX: Korrekte Behandlung der db.query() Rückgabewerte
  */
 
 class VeranstaltungDialog extends DialogBase {
@@ -9,16 +11,21 @@ class VeranstaltungDialog extends DialogBase {
    */
   async zeigeVeranstaltungVerwalten(callback) {
     const jahr = this.dataManager.aktuellesJahr;
-    const veranstaltungen = await this.dataManager.db.query(`
+    
+    // FIX: Korrekte Extraktion der Daten aus dem Result-Objekt
+    const result = await this.dataManager.db.query(`
       SELECT * FROM veranstaltungen 
       WHERE strftime('%Y', von_datum) = ? OR strftime('%Y', bis_datum) = ?
       ORDER BY von_datum
     `, [jahr.toString(), jahr.toString()]);
 
+    const veranstaltungen = result.success ? result.data : [];
+
     const veranstaltungRows = veranstaltungen.map((va, index) => {
-      const vonDatum = new Date(va.von_datum).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
-      const bisDatum = new Date(va.bis_datum).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
-      const dauerTage = Math.ceil((new Date(va.bis_datum) - new Date(va.von_datum)) / (1000 * 60 * 60 * 24)) + 1;
+      // FIX: Datum korrekt parsen ohne Zeitzonen-Verschiebung
+      const vonDatum = this._formatDatumLokal(va.von_datum);
+      const bisDatum = this._formatDatumLokal(va.bis_datum);
+      const dauerTage = this._berechneTage(va.von_datum, va.bis_datum);
 
       return `
         <tr>
@@ -94,7 +101,11 @@ class VeranstaltungDialog extends DialogBase {
 
     // Entferne alte Modals
     const oldModals = document.querySelectorAll('.modal');
-    oldModals.forEach(m => m.remove());
+    oldModals.forEach(m => {
+      const existingModal = bootstrap.Modal.getInstance(m);
+      if (existingModal) existingModal.dispose();
+      m.remove();
+    });
 
     document.body.insertAdjacentHTML('beforeend', modalHtml);
 
@@ -131,7 +142,10 @@ class VeranstaltungDialog extends DialogBase {
 
         if (confirm(`Möchten Sie die Veranstaltung "${veranstaltung.titel}" wirklich löschen?`)) {
           try {
-            await this.dataManager.db.run('DELETE FROM veranstaltungen WHERE id = ?', [veranstaltungId]);
+            const deleteResult = await this.dataManager.db.run('DELETE FROM veranstaltungen WHERE id = ?', [veranstaltungId]);
+            if (!deleteResult.success) {
+              throw new Error(deleteResult.error);
+            }
             showNotification('Erfolg', `Veranstaltung "${veranstaltung.titel}" wurde gelöscht`, 'success');
             modal.hide();
             if (callback) await callback();
@@ -146,8 +160,33 @@ class VeranstaltungDialog extends DialogBase {
     modal.show();
 
     modalElement.addEventListener('hidden.bs.modal', () => {
+      modal.dispose();
       modalElement.remove();
     });
+  }
+
+  /**
+   * Formatiert ein Datum lokal ohne Zeitzonen-Verschiebung
+   * FIX: Verhindert das "einen Tag später"-Problem
+   */
+  _formatDatumLokal(datumStr) {
+    if (!datumStr) return '-';
+    // Datum als lokales Datum parsen (nicht als UTC)
+    const [jahr, monat, tag] = datumStr.split('-').map(Number);
+    return `${String(tag).padStart(2, '0')}.${String(monat).padStart(2, '0')}.${jahr}`;
+  }
+
+  /**
+   * Berechnet die Anzahl der Tage zwischen zwei Daten
+   */
+  _berechneTage(vonDatum, bisDatum) {
+    const [vonJahr, vonMonat, vonTag] = vonDatum.split('-').map(Number);
+    const [bisJahr, bisMonat, bisTag] = bisDatum.split('-').map(Number);
+    
+    const von = new Date(vonJahr, vonMonat - 1, vonTag);
+    const bis = new Date(bisJahr, bisMonat - 1, bisTag);
+    
+    return Math.ceil((bis - von) / (1000 * 60 * 60 * 24)) + 1;
   }
 
   /**
@@ -234,10 +273,14 @@ class VeranstaltungDialog extends DialogBase {
       };
 
       try {
-        await this.dataManager.db.run(`
+        const result = await this.dataManager.db.run(`
           INSERT INTO veranstaltungen (von_datum, bis_datum, titel, beschreibung, typ)
           VALUES (?, ?, ?, ?, 'SONSTIGES')
         `, [daten.von_datum, daten.bis_datum, daten.titel, daten.beschreibung]);
+
+        if (!result.success) {
+          throw new Error(result.error);
+        }
 
         showNotification('Erfolg', `Veranstaltung "${daten.titel}" wurde angelegt!`, 'success');
         if (callback) await callback();
@@ -254,15 +297,19 @@ class VeranstaltungDialog extends DialogBase {
       const bisDatumInput = document.getElementById('bisDatum');
       const dauerAnzeige = document.getElementById('dauerAnzeige');
 
+      if (!vonDatumInput || !bisDatumInput || !dauerAnzeige) return;
+
       const berechneDauer = () => {
-        const von = new Date(vonDatumInput.value);
-        const bis = new Date(bisDatumInput.value);
+        const von = vonDatumInput.value;
+        const bis = bisDatumInput.value;
+        
+        if (!von || !bis) return;
         
         if (bis < von) {
-          bisDatumInput.value = vonDatumInput.value;
+          bisDatumInput.value = von;
           dauerAnzeige.textContent = '1';
         } else {
-          const tage = Math.ceil((bis - von) / (1000 * 60 * 60 * 24)) + 1;
+          const tage = this._berechneTage(von, bis);
           dauerAnzeige.textContent = tage;
         }
       };
@@ -282,10 +329,19 @@ class VeranstaltungDialog extends DialogBase {
       document.querySelectorAll('.dauer-btn').forEach(btn => {
         btn.addEventListener('click', () => {
           const tage = parseInt(btn.dataset.tage);
-          const von = new Date(vonDatumInput.value);
-          const bis = new Date(von);
-          bis.setDate(bis.getDate() + tage - 1);
-          bisDatumInput.value = bis.toISOString().split('T')[0];
+          const von = vonDatumInput.value;
+          if (!von) return;
+          
+          // Berechne Bis-Datum korrekt
+          const [jahr, monat, tag] = von.split('-').map(Number);
+          const vonDate = new Date(jahr, monat - 1, tag);
+          vonDate.setDate(vonDate.getDate() + tage - 1);
+          
+          const bisJahr = vonDate.getFullYear();
+          const bisMonat = String(vonDate.getMonth() + 1).padStart(2, '0');
+          const bisTag = String(vonDate.getDate()).padStart(2, '0');
+          
+          bisDatumInput.value = `${bisJahr}-${bisMonat}-${bisTag}`;
           dauerAnzeige.textContent = tage;
         });
       });
@@ -296,12 +352,15 @@ class VeranstaltungDialog extends DialogBase {
    * Zeigt Dialog zum Bearbeiten einer Veranstaltung
    */
   async zeigeVeranstaltungBearbeiten(veranstaltungId, callback) {
-    const veranstaltung = await this.dataManager.db.get('SELECT * FROM veranstaltungen WHERE id = ?', [veranstaltungId]);
-
-    if (!veranstaltung) {
+    // FIX: Korrekte Extraktion der Daten
+    const result = await this.dataManager.db.get('SELECT * FROM veranstaltungen WHERE id = ?', [veranstaltungId]);
+    
+    if (!result.success || !result.data) {
       showNotification('Fehler', 'Veranstaltung nicht gefunden', 'danger');
       return;
     }
+
+    const veranstaltung = result.data;
 
     const modalHtml = `
       <div class="modal fade" id="veranstaltungBearbeitenModal" tabindex="-1">
@@ -367,11 +426,15 @@ class VeranstaltungDialog extends DialogBase {
       };
 
       try {
-        await this.dataManager.db.run(`
+        const updateResult = await this.dataManager.db.run(`
           UPDATE veranstaltungen 
           SET von_datum = ?, bis_datum = ?, titel = ?, beschreibung = ?
           WHERE id = ?
         `, [daten.von_datum, daten.bis_datum, daten.titel, daten.beschreibung, veranstaltungId]);
+
+        if (!updateResult.success) {
+          throw new Error(updateResult.error);
+        }
 
         showNotification('Erfolg', `Veranstaltung "${daten.titel}" wurde aktualisiert!`, 'success');
         if (callback) await callback();
@@ -388,10 +451,15 @@ class VeranstaltungDialog extends DialogBase {
       const bisDatumInput = document.getElementById('bisDatum');
       const dauerAnzeige = document.getElementById('dauerAnzeige');
 
+      if (!vonDatumInput || !bisDatumInput || !dauerAnzeige) return;
+
       const berechneDauer = () => {
-        const von = new Date(vonDatumInput.value);
-        const bis = new Date(bisDatumInput.value);
-        const tage = Math.ceil((bis - von) / (1000 * 60 * 60 * 24)) + 1;
+        const von = vonDatumInput.value;
+        const bis = bisDatumInput.value;
+        
+        if (!von || !bis) return;
+        
+        const tage = this._berechneTage(von, bis);
         dauerAnzeige.textContent = Math.max(1, tage);
       };
 

@@ -8,6 +8,7 @@ let database;
 let dataManager;
 let tabelle;
 let dialogManager;
+let kalenderAnsicht;
 
 /**
  * App initialisieren
@@ -31,6 +32,10 @@ async function initApp() {
     // Dialog Manager initialisieren
     dialogManager = new DialogManager(dataManager);
     console.log('✅ Dialog Manager initialisiert');
+
+    // Kalender-Ansicht initialisieren
+    kalenderAnsicht = new KalenderAnsicht(dataManager);
+    console.log('✅ Kalender-Ansicht initialisiert');
 
     // UI initialisieren
     await initUI();
@@ -133,6 +138,20 @@ async function initUI() {
     dialogManager.zeigeVeranstaltungVerwalten(async () => {
       await loadData();
     });
+  });
+
+  // Kalender-Menü
+  document.getElementById('menuKalender').addEventListener('click', (e) => {
+    e.preventDefault();
+    kalenderAnsicht.currentYear = dataManager.aktuellesJahr;
+    kalenderAnsicht.zeigen();
+  });
+
+  // Kalender-Button in Toolbar
+  document.getElementById('btnKalenderToolbar').addEventListener('click', (e) => {
+    e.preventDefault();
+    kalenderAnsicht.currentYear = dataManager.aktuellesJahr;
+    kalenderAnsicht.zeigen();
   });
 
   document.getElementById('menuExportCSV').addEventListener('click', (e) => {

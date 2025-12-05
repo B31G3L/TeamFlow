@@ -3,11 +3,26 @@
  * Feiertage hinzufügen, bearbeiten und verwalten
  * 
  * FIXES:
+ * - Zeitzonen-Problem behoben (Datum wird nicht mehr einen Tag verschoben)
  * - Verbesserte Fehlerbehandlung beim Import von Standard-Feiertagen
  * - Korrekte db.query() Rückgabewert-Behandlung
  */
 
 class FeiertagDialog extends DialogBase {
+  /**
+   * Formatiert ein Datum lokal ohne Zeitzonen-Verschiebung
+   * FIX: Verhindert das "einen Tag später"-Problem
+   */
+  _formatDatumLokal(datumStr) {
+    if (!datumStr) return '-';
+    // Datum als String parsen, nicht als Date-Objekt (vermeidet UTC-Konvertierung)
+    const [jahr, monat, tag] = datumStr.split('-').map(Number);
+    const wochentage = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
+    const datum = new Date(jahr, monat - 1, tag);
+    const wochentag = wochentage[datum.getDay()];
+    return `${wochentag}, ${String(tag).padStart(2, '0')}.${String(monat).padStart(2, '0')}.${jahr}`;
+  }
+
   /**
    * Zeigt Feiertage-Verwaltungs-Modal
    */
@@ -35,7 +50,7 @@ class FeiertagDialog extends DialogBase {
     const feiertagRows = feiertage.map((ft, index) => `
       <tr>
         <td>${index + 1}</td>
-        <td>${new Date(ft.datum).toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric' })}</td>
+        <td>${this._formatDatumLokal(ft.datum)}</td>
         <td>${ft.name}</td>
         <td>${ft.bundesland || 'Bundesweit'}</td>
         <td>
@@ -452,6 +467,16 @@ class FeiertagDialog extends DialogBase {
   }
 
   /**
+   * Formatiert ein Datum als YYYY-MM-DD String (ohne Zeitzonen-Probleme)
+   */
+  _formatDatumISO(date) {
+    const jahr = date.getFullYear();
+    const monat = String(date.getMonth() + 1).padStart(2, '0');
+    const tag = String(date.getDate()).padStart(2, '0');
+    return `${jahr}-${monat}-${tag}`;
+  }
+
+  /**
    * Lädt deutsche Standard-Feiertage für ein Jahr
    * FIX: Verbesserte Fehlerbehandlung und Rückgabewert
    */
@@ -462,7 +487,7 @@ class FeiertagDialog extends DialogBase {
     const osterOffset = (tage) => {
       const datum = new Date(ostersonntag);
       datum.setDate(datum.getDate() + tage);
-      return datum.toISOString().split('T')[0];
+      return this._formatDatumISO(datum);
     };
 
     const formatDatum = (monat, tag) => {

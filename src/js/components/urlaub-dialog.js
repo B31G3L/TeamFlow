@@ -5,6 +5,7 @@
  * FIXES:
  * - Race Condition bei Event-Listener Initialisierung behoben
  * - Bessere Fehlerbehandlung
+ * - NEU: Validierung dass Urlaub nicht ins Minus gehen kann
  */
 
 class UrlaubDialog extends DialogBase {
@@ -14,6 +15,10 @@ class UrlaubDialog extends DialogBase {
   async zeigeUrlaubDialog(mitarbeiterId, callback) {
     const heute = new Date();
     const formatDate = (date) => date.toISOString().split('T')[0];
+
+    // Hole aktuelle Statistik für Resturlaub-Anzeige
+    const statistik = await this.dataManager.getMitarbeiterStatistik(mitarbeiterId);
+    const restUrlaub = statistik ? statistik.urlaub_rest : 0;
 
     const modalHtml = `
       <div class="modal fade" id="urlaubModal" tabindex="-1">
@@ -26,6 +31,17 @@ class UrlaubDialog extends DialogBase {
               <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
+              <!-- Resturlaub-Anzeige -->
+              <div class="alert ${restUrlaub > 5 ? 'alert-success' : restUrlaub > 0 ? 'alert-warning' : 'alert-danger'} mb-3">
+                <div class="d-flex justify-content-between align-items-center">
+                  <span>
+                    <i class="bi bi-calendar-check"></i> 
+                    <strong>Verfügbarer Resturlaub:</strong>
+                  </span>
+                  <span class="fs-5 fw-bold" id="restUrlaubAnzeige">${restUrlaub.toFixed(1)} Tage</span>
+                </div>
+              </div>
+
               <form id="urlaubForm">
                 <div class="row">
                   <div class="col-md-6 mb-3">
@@ -45,6 +61,13 @@ class UrlaubDialog extends DialogBase {
                     </label>
                     <small class="text-muted" id="berechnungsInfo">(ohne Wochenenden & Feiertage)</small>
                   </div>
+                  
+                  <!-- Warnung wenn zu viel Urlaub -->
+                  <div id="urlaubWarnung" class="alert alert-danger mt-2 d-none">
+                    <i class="bi bi-exclamation-triangle"></i>
+                    <strong>Achtung:</strong> Die gewählte Anzahl Tage übersteigt den verfügbaren Resturlaub!
+                  </div>
+                  
                   <div class="mt-2">
                     <small class="text-muted d-block mb-1">Schnellauswahl:</small>
                     <div class="d-flex gap-2 flex-wrap">
@@ -101,6 +124,12 @@ class UrlaubDialog extends DialogBase {
         return false;
       }
 
+      // VALIDIERUNG: Prüfe ob genug Resturlaub vorhanden ist
+      if (tage > restUrlaub) {
+        showNotification('Fehler', `Nicht genügend Resturlaub! Verfügbar: ${restUrlaub.toFixed(1)} Tage, Angefragt: ${tage} Tage`, 'danger');
+        return false;
+      }
+
       const eintrag = {
         typ: 'urlaub',
         mitarbeiter_id: mitarbeiterId,
@@ -121,26 +150,57 @@ class UrlaubDialog extends DialogBase {
     });
 
     // FIX: Event-Listener nach Modal-Animation initialisieren (Promise-basiert statt setTimeout)
-    await this._initUrlaubEventListener(mitarbeiterId);
+    await this._initUrlaubEventListener(mitarbeiterId, restUrlaub);
   }
 
   /**
    * Initialisiert Event-Listener für Urlaub-Dialog
    * FIX: Separate Methode für bessere Testbarkeit und Fehlerbehandlung
    */
-  async _initUrlaubEventListener(mitarbeiterId) {
+  async _initUrlaubEventListener(mitarbeiterId, restUrlaub) {
     const vonDatumInput = document.getElementById('vonDatum');
     const bisDatumInput = document.getElementById('bisDatum');
     const dauerAnzeige = document.getElementById('dauerAnzeige');
     const feiertagsHinweiseDiv = document.getElementById('feiertagsHinweise');
     const kollegenHinweiseDiv = document.getElementById('kollegenHinweise');
     const veranstaltungsHinweiseDiv = document.getElementById('veranstaltungsHinweise');
+    const urlaubWarnung = document.getElementById('urlaubWarnung');
+    const btnSpeichern = document.getElementById('btnSpeichern');
 
     // FIX: Prüfe ob Elemente existieren
     if (!vonDatumInput || !bisDatumInput || !dauerAnzeige) {
       console.warn('Urlaub-Dialog Elemente nicht gefunden');
       return;
     }
+
+    /**
+     * Prüft ob die gewählten Tage den Resturlaub übersteigen
+     */
+    const pruefeUrlaubGrenze = (tage) => {
+      if (tage > restUrlaub) {
+        if (urlaubWarnung) urlaubWarnung.classList.remove('d-none');
+        if (btnSpeichern) {
+          btnSpeichern.disabled = true;
+          btnSpeichern.classList.add('btn-secondary');
+          btnSpeichern.classList.remove('btn-success');
+        }
+        if (dauerAnzeige) {
+          dauerAnzeige.classList.remove('text-success');
+          dauerAnzeige.classList.add('text-danger');
+        }
+      } else {
+        if (urlaubWarnung) urlaubWarnung.classList.add('d-none');
+        if (btnSpeichern) {
+          btnSpeichern.disabled = false;
+          btnSpeichern.classList.remove('btn-secondary');
+          btnSpeichern.classList.add('btn-success');
+        }
+        if (dauerAnzeige) {
+          dauerAnzeige.classList.add('text-success');
+          dauerAnzeige.classList.remove('text-danger');
+        }
+      }
+    };
 
     const aktualisiereHinweise = async () => {
       const von = vonDatumInput.value;
@@ -152,6 +212,7 @@ class UrlaubDialog extends DialogBase {
         bisDatumInput.value = von;
         dauerAnzeige.textContent = '1';
         if (feiertagsHinweiseDiv) feiertagsHinweiseDiv.innerHTML = '';
+        pruefeUrlaubGrenze(1);
         return;
       }
       
@@ -159,6 +220,9 @@ class UrlaubDialog extends DialogBase {
         // Berechne Arbeitstage MIT Feiertagen (async)
         const arbeitstage = await berechneArbeitstageAsync(von, bis);
         dauerAnzeige.textContent = arbeitstage;
+        
+        // Prüfe Urlaubsgrenze
+        pruefeUrlaubGrenze(arbeitstage);
 
         // Hole Feiertage im Zeitraum für Anzeige
         if (feiertagsHinweiseDiv) {
@@ -211,6 +275,7 @@ class UrlaubDialog extends DialogBase {
             bisDatumInput.value = von;
             dauerAnzeige.textContent = '0.5';
             if (feiertagsHinweiseDiv) feiertagsHinweiseDiv.innerHTML = '';
+            pruefeUrlaubGrenze(0.5);
           } else {
             // Berechne Enddatum MIT Feiertagen
             const bis = await berechneEndDatumNachArbeitstagenAsync(von, tage);
@@ -219,6 +284,9 @@ class UrlaubDialog extends DialogBase {
             // Aktualisiere Anzeige
             const arbeitstage = await berechneArbeitstageAsync(von, bis);
             dauerAnzeige.textContent = arbeitstage;
+            
+            // Prüfe Urlaubsgrenze
+            pruefeUrlaubGrenze(arbeitstage);
             
             // Hole Feiertage im Zeitraum
             if (feiertagsHinweiseDiv) {
