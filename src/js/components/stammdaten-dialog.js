@@ -1,9 +1,27 @@
 /**
  * Stammdaten-Dialoge
  * Mitarbeiter hinzufügen, bearbeiten und verwalten
+ * 
+ * FIX: ID-Sanitierung für Umlaute und Sonderzeichen
  */
 
 class StammdatenDialog extends DialogBase {
+  /**
+   * Sanitiert einen String für die ID-Generierung
+   * - Ersetzt deutsche Umlaute
+   * - Entfernt alle nicht-alphanumerischen Zeichen
+   * - Konvertiert zu Großbuchstaben
+   */
+  _sanitizeForId(str) {
+    return str
+      .replace(/ä/gi, 'ae')
+      .replace(/ö/gi, 'oe')
+      .replace(/ü/gi, 'ue')
+      .replace(/ß/gi, 'ss')
+      .replace(/[^A-Z0-9]/gi, '')
+      .toUpperCase();
+  }
+
   /**
    * Zeigt Stammdaten Hinzufügen Dialog
    */
@@ -85,11 +103,16 @@ class StammdatenDialog extends DialogBase {
         urlaubstage_jahr: parseFloat(document.getElementById('urlaubstageJahr').value)
       };
 
-      // Generiere automatische ID
-      const vorname = daten.vorname.substring(0, 3).toUpperCase();
-      const nachname = daten.nachname.substring(0, 3).toUpperCase();
+      // FIX: Generiere automatische ID mit Sanitierung
+      const vornameClean = this._sanitizeForId(daten.vorname).substring(0, 3);
+      const nachnameClean = this._sanitizeForId(daten.nachname).substring(0, 3);
       const timestamp = Date.now().toString().slice(-4);
-      const mitarbeiterId = `${nachname}${vorname}${timestamp}`;
+      
+      // Falls Name zu kurz, mit X auffüllen
+      const vornamePadded = vornameClean.padEnd(3, 'X');
+      const nachnamePadded = nachnameClean.padEnd(3, 'X');
+      
+      const mitarbeiterId = `${nachnamePadded}${vornamePadded}${timestamp}`;
 
       try {
         await this.dataManager.stammdatenHinzufuegen(mitarbeiterId, daten);
@@ -286,7 +309,11 @@ class StammdatenDialog extends DialogBase {
 
     // Entferne alte Modals
     const oldModals = document.querySelectorAll('.modal');
-    oldModals.forEach(m => m.remove());
+    oldModals.forEach(m => {
+      const existingModal = bootstrap.Modal.getInstance(m);
+      if (existingModal) existingModal.dispose();
+      m.remove();
+    });
 
     // Füge neues Modal hinzu
     document.body.insertAdjacentHTML('beforeend', modalHtml);
@@ -332,6 +359,7 @@ class StammdatenDialog extends DialogBase {
 
     // Cleanup nach Schließen
     modalElement.addEventListener('hidden.bs.modal', () => {
+      modal.dispose();
       modalElement.remove();
     });
   }

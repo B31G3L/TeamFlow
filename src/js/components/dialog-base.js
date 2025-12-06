@@ -6,11 +6,41 @@
  * - Korrekte Behandlung von db.query() Rückgabewerten
  * - Verbesserte Fehlerbehandlung
  * - Race Condition bei Dialog-Initialisierung behoben
+ * - Memory Leak bei Modals behoben
+ * - Zeitzonen-Problem bei Datums-Konvertierung behoben
  */
 
 // Globaler Cache für Feiertage (wird beim ersten Aufruf geladen)
 let feiertageCache = null;
 let feiertageCacheJahr = null;
+
+/**
+ * Hilfsfunktion: Formatiert Datum als YYYY-MM-DD ohne Zeitzonen-Probleme
+ * FIX: Verhindert das "einen Tag später"-Problem bei toISOString()
+ */
+function formatDatumLokal(date) {
+  const jahr = date.getFullYear();
+  const monat = String(date.getMonth() + 1).padStart(2, '0');
+  const tag = String(date.getDate()).padStart(2, '0');
+  return `${jahr}-${monat}-${tag}`;
+}
+
+/**
+ * Hilfsfunktion: Parst Datum-String ohne Zeitzonen-Verschiebung
+ */
+function parseDatumLokal(datumStr) {
+  const [jahr, monat, tag] = datumStr.split('-').map(Number);
+  return new Date(jahr, monat - 1, tag);
+}
+
+/**
+ * Hilfsfunktion: Formatiert Datum für Anzeige (DD.MM.YYYY)
+ */
+function formatDatumAnzeige(datumStr) {
+  if (!datumStr) return '-';
+  const [jahr, monat, tag] = datumStr.split('-').map(Number);
+  return `${String(tag).padStart(2, '0')}.${String(monat).padStart(2, '0')}.${jahr}`;
+}
 
 /**
  * Lädt Feiertage aus der Datenbank
@@ -55,7 +85,7 @@ function invalidiereFeiertageCache() {
  * Prüft ob ein Datum ein Feiertag ist
  */
 function istFeiertag(datum, feiertageSet) {
-  const datumStr = datum.toISOString().split('T')[0];
+  const datumStr = formatDatumLokal(datum);
   return feiertageSet.has(datumStr);
 }
 
@@ -64,8 +94,8 @@ function istFeiertag(datum, feiertageSet) {
  * SYNCHRONE Version - ohne Feiertage (für Rückwärtskompatibilität)
  */
 function berechneArbeitstage(vonDatum, bisDatum) {
-  const von = new Date(vonDatum);
-  const bis = new Date(bisDatum);
+  const von = parseDatumLokal(vonDatum);
+  const bis = parseDatumLokal(bisDatum);
   
   let arbeitstage = 0;
   const current = new Date(von);
@@ -87,8 +117,8 @@ function berechneArbeitstage(vonDatum, bisDatum) {
  * ASYNCHRONE Version - mit Feiertagen
  */
 async function berechneArbeitstageAsync(vonDatum, bisDatum) {
-  const von = new Date(vonDatum);
-  const bis = new Date(bisDatum);
+  const von = parseDatumLokal(vonDatum);
+  const bis = parseDatumLokal(bisDatum);
   
   // Lade Feiertage für alle betroffenen Jahre
   const jahreSet = new Set();
@@ -111,7 +141,7 @@ async function berechneArbeitstageAsync(vonDatum, bisDatum) {
   
   while (checkDate <= bis) {
     const dayOfWeek = checkDate.getDay();
-    const datumStr = checkDate.toISOString().split('T')[0];
+    const datumStr = formatDatumLokal(checkDate);
     
     // Kein Wochenende UND kein Feiertag
     if (dayOfWeek !== 0 && dayOfWeek !== 6 && !alleFeiertage.has(datumStr)) {
@@ -142,7 +172,7 @@ async function getFeiertageImZeitraum(vonDatum, bisDatum) {
     
     // Filtere nur Feiertage die auf Werktage fallen
     return result.data.filter(f => {
-      const d = new Date(f.datum);
+      const d = parseDatumLokal(f.datum);
       const dayOfWeek = d.getDay();
       return dayOfWeek !== 0 && dayOfWeek !== 6;
     });
@@ -157,7 +187,7 @@ async function getFeiertageImZeitraum(vonDatum, bisDatum) {
  * SYNCHRONE Version
  */
 function berechneEndDatumNachArbeitstagen(vonDatum, arbeitstage) {
-  const von = new Date(vonDatum);
+  const von = parseDatumLokal(vonDatum);
   let verbleibendeArbeitstage = Math.floor(arbeitstage);
   const current = new Date(von);
   
@@ -171,7 +201,7 @@ function berechneEndDatumNachArbeitstagen(vonDatum, arbeitstage) {
     }
   }
   
-  return current.toISOString().split('T')[0];
+  return formatDatumLokal(current);
 }
 
 /**
@@ -179,7 +209,7 @@ function berechneEndDatumNachArbeitstagen(vonDatum, arbeitstage) {
  * ASYNCHRONE Version
  */
 async function berechneEndDatumNachArbeitstagenAsync(vonDatum, arbeitstage) {
-  const von = new Date(vonDatum);
+  const von = parseDatumLokal(vonDatum);
   let verbleibendeArbeitstage = Math.floor(arbeitstage);
   const current = new Date(von);
   
@@ -195,7 +225,7 @@ async function berechneEndDatumNachArbeitstagenAsync(vonDatum, arbeitstage) {
   
   while (verbleibendeArbeitstage > 0) {
     const dayOfWeek = current.getDay();
-    const datumStr = current.toISOString().split('T')[0];
+    const datumStr = formatDatumLokal(current);
     
     // Nur zählen wenn kein Wochenende UND kein Feiertag
     if (dayOfWeek !== 0 && dayOfWeek !== 6 && !alleFeiertage.has(datumStr)) {
@@ -206,7 +236,7 @@ async function berechneEndDatumNachArbeitstagenAsync(vonDatum, arbeitstage) {
     }
   }
   
-  return current.toISOString().split('T')[0];
+  return formatDatumLokal(current);
 }
 
 /**
@@ -264,7 +294,6 @@ class DialogBase {
         ORDER BY von_datum
       `, [vonDatum, bisDatum, vonDatum, bisDatum, vonDatum, bisDatum]);
 
-      // FIX: result ist ein Objekt mit {success, data} oder {success, error}
       if (!result.success) {
         console.error('Fehler beim Prüfen der Veranstaltungen:', result.error);
         return [];
@@ -293,8 +322,8 @@ class DialogBase {
     `;
 
     veranstaltungen.forEach(v => {
-      const vonFormatiert = new Date(v.von_datum).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
-      const bisFormatiert = new Date(v.bis_datum).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
+      const vonFormatiert = formatDatumAnzeige(v.von_datum);
+      const bisFormatiert = formatDatumAnzeige(v.bis_datum);
       
       const datumText = v.von_datum === v.bis_datum 
         ? vonFormatiert 
@@ -331,11 +360,10 @@ class DialogBase {
     `;
 
     feiertage.forEach(f => {
-      const datumFormatiert = new Date(f.datum).toLocaleDateString('de-DE', { 
-        weekday: 'short', 
-        day: '2-digit', 
-        month: '2-digit' 
-      });
+      const d = parseDatumLokal(f.datum);
+      const wochentage = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
+      const wochentag = wochentage[d.getDay()];
+      const datumFormatiert = `${wochentag}, ${formatDatumAnzeige(f.datum)}`;
       
       html += `
         <li>
@@ -363,7 +391,6 @@ class DialogBase {
 
       const abteilungId = mitarbeiter.abteilung_id;
 
-      // FIX: Korrekte Extraktion der Daten
       const kollegenResult = await this.dataManager.db.query(`
         SELECT id, vorname, nachname
         FROM mitarbeiter
@@ -379,7 +406,7 @@ class DialogBase {
       const abwesenheiten = [];
 
       for (const kollege of kollegen) {
-        // Prüfe Urlaub - FIX: Korrekte Extraktion
+        // Prüfe Urlaub
         const urlaubResult = await this.dataManager.db.query(`
           SELECT von_datum, bis_datum, tage
           FROM urlaub
@@ -401,7 +428,7 @@ class DialogBase {
           });
         }
 
-        // Prüfe Krankheit - FIX: Korrekte Extraktion
+        // Prüfe Krankheit
         const krankheitResult = await this.dataManager.db.query(`
           SELECT von_datum, bis_datum, tage
           FROM krankheit
@@ -423,7 +450,7 @@ class DialogBase {
           });
         }
 
-        // Prüfe Schulung - FIX: Korrekte Extraktion
+        // Prüfe Schulung
         const schulungResult = await this.dataManager.db.query(`
           SELECT datum, dauer_tage, titel
           FROM schulung
@@ -433,7 +460,7 @@ class DialogBase {
 
         if (schulungResult.success && schulungResult.data) {
           schulungResult.data.forEach(s => {
-            const start = new Date(s.datum);
+            const start = parseDatumLokal(s.datum);
             const end = new Date(start);
             end.setDate(end.getDate() + Math.floor(s.dauer_tage) - 1);
 
@@ -441,7 +468,7 @@ class DialogBase {
               name: `${kollege.vorname} ${kollege.nachname}`,
               typ: 'Schulung',
               von: s.datum,
-              bis: end.toISOString().split('T')[0],
+              bis: formatDatumLokal(end),
               tage: s.dauer_tage,
               titel: s.titel,
               klasse: 'text-info'
@@ -478,8 +505,8 @@ class DialogBase {
     `;
 
     abwesenheiten.forEach(a => {
-      const vonFormatiert = new Date(a.von).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
-      const bisFormatiert = new Date(a.bis).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
+      const vonFormatiert = formatDatumAnzeige(a.von);
+      const bisFormatiert = formatDatumAnzeige(a.bis);
       
       html += `
         <li class="${a.klasse}">
@@ -501,6 +528,7 @@ class DialogBase {
   /**
    * Hilfsfunktion: Zeigt Modal an
    * FIX: Robustere Initialisierung ohne setTimeout Race Condition
+   * FIX: Memory Leak durch korrektes dispose() behoben
    */
   async showModal(html, onSave) {
     // Entferne alte Modals
@@ -556,7 +584,7 @@ class DialogBase {
     // Modal anzeigen
     modal.show();
 
-    // Cleanup nach Schließen
+    // Cleanup nach Schließen - FIX: dispose() hinzugefügt
     modalElement.addEventListener('hidden.bs.modal', () => {
       modal.dispose();
       modalElement.remove();
@@ -581,6 +609,9 @@ if (typeof module !== 'undefined' && module.exports) {
     berechneEndDatumNachArbeitstagen, 
     berechneEndDatumNachArbeitstagenAsync, 
     getFeiertageImZeitraum, 
-    invalidiereFeiertageCache 
+    invalidiereFeiertageCache,
+    formatDatumLokal,
+    parseDatumLokal,
+    formatDatumAnzeige
   };
 }

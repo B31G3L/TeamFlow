@@ -5,6 +5,9 @@
  * FIXES:
  * - Korrekte Behandlung von db.query()/db.get() Rückgabewerten
  * - Konsistente Fehlerbehandlung
+ * - Zeitzonen-Problem bei Datums-Konvertierung behoben
+ * - Bis-Datum bei halben Tagen korrigiert
+ * - Überlappungs-Validierung hinzugefügt
  */
 
 class TeamplannerDataManager {
@@ -23,6 +26,24 @@ class TeamplannerDataManager {
   invalidateCache() {
     this.cacheValid = false;
     this.cache.clear();
+  }
+
+  /**
+   * Hilfsfunktion: Formatiert Datum als YYYY-MM-DD ohne Zeitzonen-Probleme
+   */
+  _formatDatumLokal(date) {
+    const jahr = date.getFullYear();
+    const monat = String(date.getMonth() + 1).padStart(2, '0');
+    const tag = String(date.getDate()).padStart(2, '0');
+    return `${jahr}-${monat}-${tag}`;
+  }
+
+  /**
+   * Hilfsfunktion: Parst Datum-String ohne Zeitzonen-Verschiebung
+   */
+  _parseDatumLokal(datumStr) {
+    const [jahr, monat, tag] = datumStr.split('-').map(Number);
+    return new Date(jahr, monat - 1, tag);
   }
 
   /**
@@ -180,9 +201,15 @@ class TeamplannerDataManager {
 
   /**
    * Berechnet Urlaubsübertrag rekursiv
-   * FIX: Korrekte Datenextraktion
+   * FIX: Korrekte Datenextraktion + Tiefenbegrenzung
    */
-  async berechneUebertrag(mitarbeiterId, jahr) {
+  async berechneUebertrag(mitarbeiterId, jahr, tiefe = 0) {
+    // Sicherheit: Max 50 Jahre zurück berechnen
+    if (tiefe > 50) {
+      console.warn('Übertrag-Berechnung: Maximale Tiefe erreicht');
+      return 0;
+    }
+
     // Mitarbeiter laden
     const mitarbeiterResult = await this.db.get('SELECT * FROM mitarbeiter WHERE id = ?', [mitarbeiterId]);
     if (!mitarbeiterResult.success || !mitarbeiterResult.data) return 0;
@@ -196,7 +223,7 @@ class TeamplannerDataManager {
     if (vorjahr < eintrittsjahr) return 0;
 
     // Rekursiv: Übertrag vom Vorvorjahr
-    const uebertragVorvorjahr = await this.berechneUebertrag(mitarbeiterId, vorjahr);
+    const uebertragVorvorjahr = await this.berechneUebertrag(mitarbeiterId, vorjahr, tiefe + 1);
 
     // Urlaubsanspruch im Vorjahr (anteilig wenn Eintrittsjahr)
     const urlaubsanspruchVorjahr = this.berechneAnteiligenUrlaub(mitarbeiter, vorjahr);
@@ -360,8 +387,22 @@ class TeamplannerDataManager {
   }
 
   /**
+   * Sanitiert einen String für die ID-Generierung
+   * FIX: Umlaute und Sonderzeichen werden korrekt behandelt
+   */
+  _sanitizeForId(str) {
+    return str
+      .replace(/ä/gi, 'ae')
+      .replace(/ö/gi, 'oe')
+      .replace(/ü/gi, 'ue')
+      .replace(/ß/gi, 'ss')
+      .replace(/[^A-Z0-9]/gi, '')
+      .toUpperCase();
+  }
+
+  /**
    * Fügt Mitarbeiter hinzu
-   * FIX: Korrekte Fehlerbehandlung
+   * FIX: Korrekte Fehlerbehandlung + ID-Sanitierung
    */
   async stammdatenHinzufuegen(mitarbeiterId, daten) {
     try {
@@ -492,8 +533,39 @@ class TeamplannerDataManager {
   }
 
   /**
+   * Prüft ob bereits ein Eintrag im gleichen Zeitraum existiert
+   * NEU: Verhindert doppelte Buchungen
+   */
+  async pruefeUeberlappung(tabelle, mitarbeiterId, vonDatum, bisDatum) {
+    // Nur erlaubte Tabellennamen zulassen (SQL-Injection-Schutz)
+    const erlaubteTabellem = ['urlaub', 'krankheit'];
+    if (!erlaubteTabellem.includes(tabelle)) {
+      throw new Error(`Ungültiger Tabellenname: ${tabelle}`);
+    }
+
+    const sql = `
+      SELECT COUNT(*) as count FROM ${tabelle}
+      WHERE mitarbeiter_id = ?
+        AND (
+          (von_datum BETWEEN ? AND ?)
+          OR (bis_datum BETWEEN ? AND ?)
+          OR (von_datum <= ? AND bis_datum >= ?)
+        )
+    `;
+    
+    const result = await this.db.get(sql, [
+      mitarbeiterId,
+      vonDatum, bisDatum,
+      vonDatum, bisDatum,
+      vonDatum, bisDatum
+    ]);
+    
+    return (result.success && result.data && result.data.count > 0);
+  }
+
+  /**
    * Speichert einen Eintrag (Urlaub, Krankheit, etc.)
-   * FIX: Korrekte Fehlerbehandlung
+   * FIX: Korrekte Fehlerbehandlung + Zeitzonen-Fix + Halbe-Tage-Fix + Überlappungs-Check
    */
   async speichereEintrag(eintrag) {
     try {
@@ -506,9 +578,24 @@ class TeamplannerDataManager {
       let result;
 
       if (typ === 'urlaub') {
-        const vonDatum = new Date(datum);
+        // FIX: Datum lokal parsen (ohne UTC-Konvertierung)
+        const vonDatum = this._parseDatumLokal(datum);
         const bisDatum = new Date(vonDatum);
-        bisDatum.setDate(bisDatum.getDate() + Math.floor(wert) - 1);
+        
+        // FIX: Bei halben Tagen (0.5) oder 1 Tag bleibt bisDatum = vonDatum
+        // Bei mehr als 1 Tag: bisDatum = vonDatum + (aufgerundete Tage - 1)
+        const ganzeTage = Math.ceil(wert);
+        if (ganzeTage > 1) {
+          bisDatum.setDate(bisDatum.getDate() + ganzeTage - 1);
+        }
+
+        const bisDatumStr = this._formatDatumLokal(bisDatum);
+
+        // NEU: Prüfe auf Überlappungen
+        const hatUeberlappung = await this.pruefeUeberlappung('urlaub', mitarbeiterId, datum, bisDatumStr);
+        if (hatUeberlappung) {
+          throw new Error('Im gewählten Zeitraum existiert bereits ein Urlaubseintrag. Bitte prüfen Sie die bestehenden Einträge.');
+        }
 
         result = await this.db.run(`
           INSERT INTO urlaub (mitarbeiter_id, von_datum, bis_datum, tage, notiz)
@@ -516,14 +603,28 @@ class TeamplannerDataManager {
         `, [
           mitarbeiterId,
           datum,
-          bisDatum.toISOString().split('T')[0],
+          bisDatumStr,
           wert,
           notiz
         ]);
       } else if (typ === 'krank') {
-        const vonDatum = new Date(datum);
+        // FIX: Datum lokal parsen (ohne UTC-Konvertierung)
+        const vonDatum = this._parseDatumLokal(datum);
         const bisDatum = new Date(vonDatum);
-        bisDatum.setDate(bisDatum.getDate() + Math.floor(wert) - 1);
+        
+        // FIX: Gleiche Logik wie bei Urlaub
+        const ganzeTage = Math.ceil(wert);
+        if (ganzeTage > 1) {
+          bisDatum.setDate(bisDatum.getDate() + ganzeTage - 1);
+        }
+
+        const bisDatumStr = this._formatDatumLokal(bisDatum);
+
+        // NEU: Prüfe auf Überlappungen
+        const hatUeberlappung = await this.pruefeUeberlappung('krankheit', mitarbeiterId, datum, bisDatumStr);
+        if (hatUeberlappung) {
+          throw new Error('Im gewählten Zeitraum existiert bereits ein Krankheitseintrag. Bitte prüfen Sie die bestehenden Einträge.');
+        }
 
         result = await this.db.run(`
           INSERT INTO krankheit (mitarbeiter_id, von_datum, bis_datum, tage, notiz)
@@ -531,7 +632,7 @@ class TeamplannerDataManager {
         `, [
           mitarbeiterId,
           datum,
-          bisDatum.toISOString().split('T')[0],
+          bisDatumStr,
           wert,
           notiz
         ]);

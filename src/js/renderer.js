@@ -1,6 +1,9 @@
 /**
  * Teamplanner - Renderer Process
  * Orchestriert die gesamte App
+ * 
+ * FIX: CSV-Export mit BOM für Excel-Kompatibilität
+ * FIX: Memory Leak bei Blob-URL behoben
  */
 
 // Globale Variablen
@@ -429,12 +432,15 @@ async function zeigeDetails(mitarbeiterId) {
   modal.show();
 
   modalElement.addEventListener('hidden.bs.modal', () => {
+    modal.dispose();
     modalElement.remove();
   });
 }
 
 /**
  * Exportiert Daten als CSV
+ * FIX: BOM hinzugefügt für korrekte Umlaut-Darstellung in Excel
+ * FIX: Memory Leak bei Blob-URL behoben
  */
 async function exportToCSV() {
   try {
@@ -445,13 +451,24 @@ async function exportToCSV() {
       return;
     }
 
+    // FIX: BOM (Byte Order Mark) für UTF-8 mit Excel-Kompatibilität
+    const BOM = '\uFEFF';
+    
     // CSV Header
-    let csv = 'Vorname;Nachname;Abteilung;Anspruch;Übertrag;Verfügbar;Genommen;Rest;Krank;Schulung;Überstunden\n';
+    let csv = BOM + 'Vorname;Nachname;Abteilung;Anspruch;Übertrag;Verfügbar;Genommen;Rest;Krank;Schulung;Überstunden\n';
+
+    // Hilfsfunktion: Escape Semikolons in Feldern
+    const escapeField = (field) => {
+      if (field && field.toString().includes(';')) {
+        return `"${field}"`;
+      }
+      return field;
+    };
 
     // Daten
     stats.forEach(stat => {
       const ma = stat.mitarbeiter;
-      csv += `${ma.vorname};${ma.nachname};${ma.abteilung_name};`;
+      csv += `${escapeField(ma.vorname)};${escapeField(ma.nachname)};${escapeField(ma.abteilung_name)};`;
       csv += `${ma.urlaubstage_jahr};${stat.uebertrag_vorjahr.toFixed(1)};${stat.urlaub_verfuegbar.toFixed(1)};`;
       csv += `${stat.urlaub_genommen.toFixed(1)};${stat.urlaub_rest.toFixed(1)};${stat.krankheitstage.toFixed(1)};`;
       csv += `${stat.schulungstage.toFixed(1)};${stat.ueberstunden.toFixed(1)}\n`;
@@ -476,9 +493,12 @@ async function exportToCSV() {
       // Fallback für Browser (Download)
       const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
       const link = document.createElement('a');
-      link.href = URL.createObjectURL(blob);
+      const url = URL.createObjectURL(blob);
+      link.href = url;
       link.download = `teamplanner_export_${dataManager.aktuellesJahr}.csv`;
       link.click();
+      // FIX: URL wieder freigeben um Memory Leak zu verhindern
+      setTimeout(() => URL.revokeObjectURL(url), 100);
       showNotification('Export erfolgreich', 'CSV wurde heruntergeladen', 'success');
     }
 

@@ -1,6 +1,8 @@
 /**
  * Teamplanner - Preload Script
  * Sichere Bridge zwischen Main und Renderer Process
+ * 
+ * FIX: getDatabasePath hinzugefügt
  */
 
 const { contextBridge, ipcRenderer } = require('electron');
@@ -17,6 +19,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // App APIs
   getAppPath: (name) => ipcRenderer.invoke('app:getPath', name),
   getVersion: () => ipcRenderer.invoke('app:getVersion'),
+  
+  // FIX: Diese Funktion fehlte!
+  getDatabasePath: () => ipcRenderer.invoke('app:getDatabasePath'),
 
   // Database APIs
   db: {
