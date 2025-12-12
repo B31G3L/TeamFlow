@@ -4,6 +4,7 @@
  * 
  * FIX: CSV-Export mit BOM für Excel-Kompatibilität
  * FIX: Memory Leak bei Blob-URL behoben
+ * FIX: Haupttabelle wird nach Detail-Dialog-Änderungen aktualisiert
  * NEU: Übertrag-Anpassung hinzugefügt
  */
 
@@ -230,7 +231,7 @@ async function initUI() {
   });
 
   // Event Delegation für klickbare Tabellenzellen
-  document.getElementById('mitarbeiterTabelleBody').addEventListener('click', (e) => {
+  document.getElementById('mitarbeiterTabelleBody').addEventListener('click', async (e) => {
     const clickable = e.target.closest('.clickable');
     if (!clickable) return;
 
@@ -240,8 +241,11 @@ async function initUI() {
 
     switch (action) {
       case 'details':
-        // Verwende den neuen DetailDialog mit Jahr-Navigation
-        dialogManager.zeigeDetails(mitarbeiterId, dataManager.aktuellesJahr);
+        // FIX: Nach Schließen des Detail-Dialogs Haupttabelle aktualisieren
+        await dialogManager.zeigeDetails(mitarbeiterId, dataManager.aktuellesJahr);
+        // Detail-Dialog ist geschlossen, lade Daten neu
+        console.log('🔄 Detail-Dialog geschlossen - aktualisiere Haupttabelle');
+        await loadData();
         break;
       case 'bearbeiten':
         dialogManager.zeigeStammdatenBearbeiten(mitarbeiterId, async () => {
@@ -277,7 +281,7 @@ async function initUI() {
           await loadData();
         });
         break;
-      case 'uebertrag': // NEU
+      case 'uebertrag':
         dialogManager.zeigeUebertragAnpassen(mitarbeiterId, async () => {
           await loadData();
         });
