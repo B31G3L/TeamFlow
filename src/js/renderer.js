@@ -6,6 +6,7 @@
  * FIX: Memory Leak bei Blob-URL behoben
  * FIX: Haupttabelle wird nach Detail-Dialog-Änderungen aktualisiert
  * NEU: Übertrag-Anpassung hinzugefügt
+ * NEU: Log-Viewer und App-Info Menü implementiert
  */
 
 // Globale Variablen
@@ -207,6 +208,41 @@ async function initUI() {
     await toggleAnsicht();
   });
 
+  // Log-Viewer Menü (NEU)
+  document.getElementById('menuLogs').addEventListener('click', async (e) => {
+    e.preventDefault();
+    const logViewer = new LogViewer();
+    await logViewer.zeigen();
+  });
+
+  // App-Info Menü (NEU)
+  document.getElementById('menuInfo').addEventListener('click', async (e) => {
+    e.preventDefault();
+    try {
+      const version = await window.electronAPI.getAppVersion();
+      const dbPath = await window.electronAPI.getDatabasePath();
+      const info = await database.getDatabaseInfo();
+      
+      const infoText = `Teamplanner Version: ${version}
+Datenbank: ${dbPath}
+
+Statistik:
+- Mitarbeiter: ${info.tables.mitarbeiter}
+- Abteilungen: ${info.tables.abteilungen}
+- Urlaub: ${info.tables.urlaub}
+- Krankheit: ${info.tables.krankheit}
+- Schulung: ${info.tables.schulung}
+- Überstunden: ${info.tables.ueberstunden}
+- Feiertage: ${info.tables.feiertage}
+- Veranstaltungen: ${info.tables.veranstaltungen}`;
+      
+      alert(infoText);
+    } catch (error) {
+      console.error('Fehler beim Laden der App-Info:', error);
+      showNotification('Fehler', 'App-Info konnte nicht geladen werden', 'danger');
+    }
+  });
+
   document.getElementById('menuExportCSV').addEventListener('click', (e) => {
     e.preventDefault();
     exportToCSV();
@@ -241,11 +277,14 @@ async function initUI() {
 
     switch (action) {
       case 'details':
-        // FIX: Nach Schließen des Detail-Dialogs Haupttabelle aktualisieren
+        // Zeige Detail-Dialog und warte auf Schließen
         await dialogManager.zeigeDetails(mitarbeiterId, dataManager.aktuellesJahr);
-        // Detail-Dialog ist geschlossen, lade Daten neu
+        // Detail-Dialog wurde geschlossen, lade Daten neu
         console.log('🔄 Detail-Dialog geschlossen - aktualisiere Haupttabelle');
         await loadData();
+        if (aktuelleAnsicht === 'kalender') {
+          await kalenderAnsicht.zeigen();
+        }
         break;
       case 'bearbeiten':
         dialogManager.zeigeStammdatenBearbeiten(mitarbeiterId, async () => {
@@ -372,7 +411,7 @@ async function exportToCSV() {
 
     // Datei speichern (Electron API)
     if (window.electronAPI) {
-      const result = await window.electronAPI.saveFile({
+      const result = await window.electronAPI.showSaveDialog({
         title: 'CSV Exportieren',
         defaultPath: `teamplanner_export_${dataManager.aktuellesJahr}.csv`,
         filters: [
