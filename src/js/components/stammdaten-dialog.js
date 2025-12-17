@@ -5,14 +5,13 @@
  * FIX: ID-Sanitierung für Umlaute und Sonderzeichen
  * NEU: Gesamtanzahl Mitarbeiter wird angezeigt
  * NEU: Arbeitszeitmodell Button hinzugefügt
+ * NEU: Switch für Vollzeit (40h) / Angepasst
  */
 
 class StammdatenDialog extends DialogBase {
   /**
    * Sanitiert einen String für die ID-Generierung
-   * - Ersetzt deutsche Umlaute
-   * - Entfernt alle nicht-alphanumerischen Zeichen
-   * - Konvertiert zu Großbuchstaben
+   * FIX: Umlaute und Sonderzeichen werden korrekt behandelt
    */
   _sanitizeForId(str) {
     return str
@@ -22,6 +21,46 @@ class StammdatenDialog extends DialogBase {
       .replace(/ß/gi, 'ss')
       .replace(/[^A-Z0-9]/gi, '')
       .toUpperCase();
+  }
+
+  /**
+   * Initialisiert den Arbeitszeit-Switch
+   */
+  _initArbeitszeitSwitch() {
+    const switchElement = document.getElementById('arbeitszeitSwitch');
+    const container = document.getElementById('angepassteStundenContainer');
+    const label = document.getElementById('arbeitszeitLabel');
+    const stundenInput = document.getElementById('wochenstunden');
+
+    if (!switchElement || !container || !label || !stundenInput) return;
+
+    const updateUI = () => {
+      if (switchElement.checked) {
+        // Vollzeit
+        container.classList.add('d-none');
+        label.innerHTML = '<i class="bi bi-check-circle text-success"></i> Vollzeit (40h)';
+        stundenInput.value = 40;
+      } else {
+        // Angepasst
+        container.classList.remove('d-none');
+        const stunden = parseFloat(stundenInput.value) || 40;
+        label.innerHTML = `<i class="bi bi-clock-history text-info"></i> Angepasst (${stunden}h)`;
+      }
+    };
+
+    // Event-Listener für Switch
+    switchElement.addEventListener('change', updateUI);
+
+    // Event-Listener für Stunden-Input (aktualisiert Label)
+    stundenInput.addEventListener('input', () => {
+      if (!switchElement.checked) {
+        const stunden = parseFloat(stundenInput.value) || 40;
+        label.innerHTML = `<i class="bi bi-clock-history text-info"></i> Angepasst (${stunden}h)`;
+      }
+    });
+
+    // Initial UI setzen
+    updateUI();
   }
 
   /**
@@ -71,18 +110,30 @@ class StammdatenDialog extends DialogBase {
                   </div>
                 </div>
 
-                <div class="row">
-                  <div class="col-md-6 mb-3">
-                    <label class="form-label">Urlaubstage pro Jahr *</label>
-                    <input type="number" class="form-control" id="urlaubstageJahr" value="30" min="0" max="50" required>
+                <div class="mb-3">
+                  <label class="form-label">Urlaubstage pro Jahr *</label>
+                  <input type="number" class="form-control" id="urlaubstageJahr" value="30" min="0" max="50" required>
+                </div>
+
+                <!-- NEU: Arbeitszeit-Switch -->
+                <div class="mb-3">
+                  <label class="form-label">Arbeitszeit *</label>
+                  <div class="d-flex align-items-center gap-3 mb-2">
+                    <div class="form-check form-switch">
+                      <input class="form-check-input" type="checkbox" id="arbeitszeitSwitch" checked>
+                      <label class="form-check-label fw-bold" for="arbeitszeitSwitch" id="arbeitszeitLabel">
+                        <i class="bi bi-check-circle text-success"></i> Vollzeit (40h)
+                      </label>
+                    </div>
                   </div>
-                  <div class="col-md-6 mb-3">
-                    <label class="form-label">Wochenstunden *</label>
+                  
+                  <!-- Angepasste Stunden (initial versteckt) -->
+                  <div id="angepassteStundenContainer" class="d-none mt-2">
                     <div class="input-group">
                       <input type="number" class="form-control" id="wochenstunden" value="40" min="0" max="60" step="0.5" required>
-                      <span class="input-group-text">Std.</span>
+                      <span class="input-group-text">Stunden/Woche</span>
                     </div>
-                    <small class="text-muted">Standard Vollzeit: 40h</small>
+                    <small class="text-muted">Geben Sie die individuelle Wochenstundenzahl ein</small>
                   </div>
                 </div>
               </form>
@@ -138,19 +189,24 @@ class StammdatenDialog extends DialogBase {
       }
     });
 
-    // Heutiges Datum als Standard
-    const heute = new Date().toISOString().split('T')[0];
+    // Initialisiere Switch nach Modal-Animation
     setTimeout(() => {
+      // Heutiges Datum als Standard
+      const heute = new Date().toISOString().split('T')[0];
       const einstellungsdatumField = document.getElementById('einstellungsdatum');
       if (einstellungsdatumField) {
         einstellungsdatumField.value = heute;
       }
+
+      // Initialisiere Arbeitszeit-Switch
+      this._initArbeitszeitSwitch();
     }, 100);
   }
 
   /**
    * Zeigt Stammdaten Bearbeiten Dialog
    * NEU: Arbeitszeitmodell Button hinzugefügt
+   * NEU: Switch für Vollzeit/Angepasst
    */
   async zeigeStammdatenBearbeiten(mitarbeiterId, callback) {
     const mitarbeiter = await this.dataManager.getMitarbeiter(mitarbeiterId);
@@ -161,6 +217,8 @@ class StammdatenDialog extends DialogBase {
     }
 
     const abteilungen = await this.dataManager.getAlleAbteilungen();
+    const wochenstunden = mitarbeiter.wochenstunden || 40;
+    const istVollzeit = wochenstunden === 40;
 
     const modalHtml = `
       <div class="modal fade" id="stammdatenBearbeitenModal" tabindex="-1">
@@ -173,14 +231,15 @@ class StammdatenDialog extends DialogBase {
               <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-              <!-- NEU: Arbeitszeitmodell Button -->
+              <!-- Arbeitszeitmodell-Karte -->
               <div class="alert alert-info d-flex justify-content-between align-items-center mb-3">
                 <div>
-                  <i class="bi bi-clock-history"></i>
-                  <strong>Arbeitszeitmodell:</strong> ${mitarbeiter.wochenstunden || 40}h/Woche
+                  <i class="bi bi-calendar-week"></i>
+                  <strong>Arbeitszeitmodell</strong>
+                  <div class="small text-muted mt-1">Detaillierter Wochenplan mit Halbtagen</div>
                 </div>
                 <button type="button" class="btn btn-sm btn-outline-info" id="btnArbeitszeitmodell">
-                  <i class="bi bi-calendar-week"></i> Wochenplan bearbeiten
+                  <i class="bi bi-pencil"></i> Bearbeiten
                 </button>
               </div>
 
@@ -214,17 +273,30 @@ class StammdatenDialog extends DialogBase {
                   </div>
                 </div>
 
-                <div class="row">
-                  <div class="col-md-6 mb-3">
-                    <label class="form-label">Urlaubstage pro Jahr *</label>
-                    <input type="number" class="form-control" id="urlaubstageJahr" value="${mitarbeiter.urlaubstage_jahr}" min="0" max="50" required>
-                  </div>
-                  <div class="col-md-6 mb-3">
-                    <label class="form-label">Wochenstunden *</label>
-                    <div class="input-group">
-                      <input type="number" class="form-control" id="wochenstunden" value="${mitarbeiter.wochenstunden || 40}" min="0" max="60" step="0.5" required>
-                      <span class="input-group-text">Std.</span>
+                <div class="mb-3">
+                  <label class="form-label">Urlaubstage pro Jahr *</label>
+                  <input type="number" class="form-control" id="urlaubstageJahr" value="${mitarbeiter.urlaubstage_jahr}" min="0" max="50" required>
+                </div>
+
+                <!-- NEU: Arbeitszeit-Switch -->
+                <div class="mb-3">
+                  <label class="form-label">Arbeitszeit *</label>
+                  <div class="d-flex align-items-center gap-3 mb-2">
+                    <div class="form-check form-switch">
+                      <input class="form-check-input" type="checkbox" id="arbeitszeitSwitch" ${istVollzeit ? 'checked' : ''}>
+                      <label class="form-check-label fw-bold" for="arbeitszeitSwitch" id="arbeitszeitLabel">
+                        ${istVollzeit ? '<i class="bi bi-check-circle text-success"></i> Vollzeit (40h)' : `<i class="bi bi-clock-history text-info"></i> Angepasst (${wochenstunden}h)`}
+                      </label>
                     </div>
+                  </div>
+                  
+                  <!-- Angepasste Stunden -->
+                  <div id="angepassteStundenContainer" class="${istVollzeit ? 'd-none' : ''} mt-2">
+                    <div class="input-group">
+                      <input type="number" class="form-control" id="wochenstunden" value="${wochenstunden}" min="0" max="60" step="0.5" required>
+                      <span class="input-group-text">Stunden/Woche</span>
+                    </div>
+                    <small class="text-muted">Geben Sie die individuelle Wochenstundenzahl ein</small>
                   </div>
                 </div>
 
@@ -276,8 +348,9 @@ class StammdatenDialog extends DialogBase {
       }
     });
 
-    // NEU: Event-Listener für Arbeitszeitmodell Button
+    // Event-Listener und Switch initialisieren
     setTimeout(() => {
+      // Arbeitszeitmodell Button
       const btnArbeitszeitmodell = document.getElementById('btnArbeitszeitmodell');
       if (btnArbeitszeitmodell) {
         btnArbeitszeitmodell.addEventListener('click', async () => {
@@ -293,6 +366,9 @@ class StammdatenDialog extends DialogBase {
           }
         });
       }
+
+      // Initialisiere Arbeitszeit-Switch
+      this._initArbeitszeitSwitch();
     }, 100);
   }
 

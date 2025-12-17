@@ -2,21 +2,17 @@
  * Dialog-Basis-Klasse und Hilfsfunktionen
  * Gemeinsame Funktionalität für alle Dialoge
  * 
- * FIXES:
- * - Korrekte Behandlung von db.query() Rückgabewerten
- * - Verbesserte Fehlerbehandlung
- * - Race Condition bei Dialog-Initialisierung behoben
- * - Memory Leak bei Modals behoben
- * - Zeitzonen-Problem bei Datums-Konvertierung behoben
+ * NEU: Arbeitszeitmodell-Berücksichtigung bei Urlaubsberechnung
+ * - Freie Tage (z.B. Freitag bei 4-Tage-Woche) zählen nicht als Urlaub
+ * - Halbe Tage werden als 0.5 Urlaubstage gezählt
  */
 
-// Globaler Cache für Feiertage (wird beim ersten Aufruf geladen)
+// Globaler Cache für Feiertage
 let feiertageCache = null;
 let feiertageCacheJahr = null;
 
 /**
  * Hilfsfunktion: Formatiert Datum als YYYY-MM-DD ohne Zeitzonen-Probleme
- * FIX: Verhindert das "einen Tag später"-Problem bei toISOString()
  */
 function formatDatumLokal(date) {
   const jahr = date.getFullYear();
@@ -62,7 +58,6 @@ async function ladeFeiertage(jahr) {
       return new Set();
     }
     
-    // Erstelle Set für schnelle Lookups
     feiertageCache = new Set(result.data.map(f => f.datum));
     feiertageCacheJahr = jahr;
     
@@ -74,7 +69,7 @@ async function ladeFeiertage(jahr) {
 }
 
 /**
- * Invalidiert den Feiertage-Cache (z.B. nach Änderungen)
+ * Invalidiert den Feiertage-Cache
  */
 function invalidiereFeiertageCache() {
   feiertageCache = null;
@@ -90,8 +85,71 @@ function istFeiertag(datum, feiertageSet) {
 }
 
 /**
- * Berechnet die Anzahl der Arbeitstage zwischen zwei Daten (ohne Wochenenden)
- * SYNCHRONE Version - ohne Feiertage (für Rückwärtskompatibilität)
+ * Lädt Arbeitszeitmodell für einen Mitarbeiter
+ * NEU: Für korrekte Urlaubsberechnung
+ */
+async function ladeArbeitszeitmodell(mitarbeiterId) {
+  try {
+    const db = window.electronAPI.db;
+    const result = await db.query(`
+      SELECT wochentag, arbeitszeit FROM arbeitszeitmodell 
+      WHERE mitarbeiter_id = ?
+      ORDER BY wochentag
+    `, [mitarbeiterId]);
+    
+    if (!result.success) {
+      return null;
+    }
+    
+    return result.data;
+  } catch (error) {
+    console.error('Fehler beim Laden des Arbeitszeitmodells:', error);
+    return null;
+  }
+}
+
+/**
+ * Berechnet wie viele Urlaubstage ein Tag wert ist (unter Berücksichtigung des Arbeitszeitmodells)
+ * NEU: Berücksichtigt freie Tage und Halbtage
+ * 
+ * @returns 0 = freier Tag (kein Urlaub), 0.5 = Halbtag, 1.0 = voller Tag
+ */
+function berechneUrlaubstageWert(datum, arbeitszeitmodell) {
+  const date = parseDatumLokal(datum);
+  const wochentag = date.getDay(); // 0 = Sonntag, 1 = Montag, ..., 6 = Samstag
+  
+  // Konvertiere zu unserem System (0 = Montag, 6 = Sonntag)
+  const wochentagIndex = wochentag === 0 ? 6 : wochentag - 1;
+  
+  // Wenn kein Arbeitszeitmodell, Standard: Mo-Fr = VOLL, Sa-So = FREI
+  if (!arbeitszeitmodell || arbeitszeitmodell.length === 0) {
+    return wochentagIndex < 5 ? 1.0 : 0; // Mo-Fr = 1.0, Sa-So = 0
+  }
+  
+  // Finde Modell für diesen Wochentag
+  const tagModell = arbeitszeitmodell.find(m => m.wochentag === wochentagIndex);
+  
+  // Wenn kein Modell für diesen Tag definiert, Standard: Mo-Fr = VOLL
+  if (!tagModell) {
+    return wochentagIndex < 5 ? 1.0 : 0;
+  }
+  
+  // Nach Arbeitszeit-Typ
+  switch (tagModell.arbeitszeit) {
+    case 'VOLL':
+      return 1.0;
+    case 'HALB':
+      return 0.5;
+    case 'FREI':
+      return 0;
+    default:
+      return 1.0;
+  }
+}
+
+/**
+ * Berechnet Arbeitstage (SYNCHRON, ohne Feiertage und ohne Arbeitszeitmodell)
+ * Für Rückwärtskompatibilität
  */
 function berechneArbeitstage(vonDatum, bisDatum) {
   const von = parseDatumLokal(vonDatum);
@@ -102,7 +160,6 @@ function berechneArbeitstage(vonDatum, bisDatum) {
   
   while (current <= bis) {
     const dayOfWeek = current.getDay();
-    // 0 = Sonntag, 6 = Samstag
     if (dayOfWeek !== 0 && dayOfWeek !== 6) {
       arbeitstage++;
     }
@@ -113,12 +170,20 @@ function berechneArbeitstage(vonDatum, bisDatum) {
 }
 
 /**
- * Berechnet die Anzahl der Arbeitstage zwischen zwei Daten (ohne Wochenenden UND Feiertage)
- * ASYNCHRONE Version - mit Feiertagen
+ * Berechnet Urlaubstage mit Arbeitszeitmodell-Berücksichtigung
+ * NEU: Berücksichtigt freie Tage und Halbtage des Mitarbeiters
+ * 
+ * @param {string} vonDatum - Start-Datum (YYYY-MM-DD)
+ * @param {string} bisDatum - End-Datum (YYYY-MM-DD)
+ * @param {string} mitarbeiterId - Mitarbeiter-ID
+ * @returns {Promise<number>} Anzahl Urlaubstage (kann Dezimalzahlen sein, z.B. 4.5)
  */
-async function berechneArbeitstageAsync(vonDatum, bisDatum) {
+async function berechneUrlaubstageAsync(vonDatum, bisDatum, mitarbeiterId) {
   const von = parseDatumLokal(vonDatum);
   const bis = parseDatumLokal(bisDatum);
+  
+  // Lade Arbeitszeitmodell
+  const arbeitszeitmodell = await ladeArbeitszeitmodell(mitarbeiterId);
   
   // Lade Feiertage für alle betroffenen Jahre
   const jahreSet = new Set();
@@ -128,14 +193,60 @@ async function berechneArbeitstageAsync(vonDatum, bisDatum) {
     current.setDate(current.getDate() + 1);
   }
   
-  // Sammle alle Feiertage
   const alleFeiertage = new Set();
   for (const jahr of jahreSet) {
     const feiertage = await ladeFeiertage(jahr);
     feiertage.forEach(f => alleFeiertage.add(f));
   }
   
-  // Berechne Arbeitstage
+  // Berechne Urlaubstage
+  let urlaubstage = 0;
+  const checkDate = new Date(von);
+  
+  while (checkDate <= bis) {
+    const datumStr = formatDatumLokal(checkDate);
+    
+    // Prüfe ob Feiertag (der auf einen Arbeitstag fällt)
+    if (alleFeiertage.has(datumStr)) {
+      const urlaubswert = berechneUrlaubstageWert(datumStr, arbeitszeitmodell);
+      // Feiertag zählt nur wenn es ein Arbeitstag wäre
+      if (urlaubswert > 0) {
+        // Feiertag wird NICHT als Urlaub gezählt
+        checkDate.setDate(checkDate.getDate() + 1);
+        continue;
+      }
+    }
+    
+    // Berechne Urlaubswert für diesen Tag
+    const urlaubswert = berechneUrlaubstageWert(datumStr, arbeitszeitmodell);
+    urlaubstage += urlaubswert;
+    
+    checkDate.setDate(checkDate.getDate() + 1);
+  }
+  
+  return urlaubstage;
+}
+
+/**
+ * Alte Funktion für Rückwärtskompatibilität (verwendet keine Arbeitszeitmodelle)
+ */
+async function berechneArbeitstageAsync(vonDatum, bisDatum) {
+  const von = parseDatumLokal(vonDatum);
+  const bis = parseDatumLokal(bisDatum);
+  
+  const jahreSet = new Set();
+  const current = new Date(von);
+  while (current <= bis) {
+    jahreSet.add(current.getFullYear());
+    current.setDate(current.getDate() + 1);
+  }
+  
+  const alleFeiertage = new Set();
+  for (const jahr of jahreSet) {
+    const feiertage = await ladeFeiertage(jahr);
+    feiertage.forEach(f => alleFeiertage.add(f));
+  }
+  
   let arbeitstage = 0;
   const checkDate = new Date(von);
   
@@ -143,7 +254,6 @@ async function berechneArbeitstageAsync(vonDatum, bisDatum) {
     const dayOfWeek = checkDate.getDay();
     const datumStr = formatDatumLokal(checkDate);
     
-    // Kein Wochenende UND kein Feiertag
     if (dayOfWeek !== 0 && dayOfWeek !== 6 && !alleFeiertage.has(datumStr)) {
       arbeitstage++;
     }
@@ -170,7 +280,6 @@ async function getFeiertageImZeitraum(vonDatum, bisDatum) {
       return [];
     }
     
-    // Filtere nur Feiertage die auf Werktage fallen
     return result.data.filter(f => {
       const d = parseDatumLokal(f.datum);
       const dayOfWeek = d.getDay();
@@ -183,8 +292,57 @@ async function getFeiertageImZeitraum(vonDatum, bisDatum) {
 }
 
 /**
- * Berechnet das End-Datum basierend auf Arbeitstagen (ohne Feiertage)
- * SYNCHRONE Version
+ * Berechnet End-Datum nach Urlaubstagen (MIT Arbeitszeitmodell)
+ * NEU: Berücksichtigt freie Tage
+ */
+async function berechneEndDatumNachUrlaubstagenAsync(vonDatum, urlaubstage, mitarbeiterId) {
+  const von = parseDatumLokal(vonDatum);
+  let verbleibendeUrlaubstage = urlaubstage;
+  const current = new Date(von);
+  
+  // Lade Arbeitszeitmodell
+  const arbeitszeitmodell = await ladeArbeitszeitmodell(mitarbeiterId);
+  
+  // Schätze maximales Jahr
+  const maxJahr = von.getFullYear() + 1;
+  
+  // Lade Feiertage
+  const alleFeiertage = new Set();
+  for (let jahr = von.getFullYear(); jahr <= maxJahr; jahr++) {
+    const feiertage = await ladeFeiertage(jahr);
+    feiertage.forEach(f => alleFeiertage.add(f));
+  }
+  
+  while (verbleibendeUrlaubstage > 0) {
+    const datumStr = formatDatumLokal(current);
+    
+    // Prüfe ob Feiertag
+    if (alleFeiertage.has(datumStr)) {
+      const urlaubswert = berechneUrlaubstageWert(datumStr, arbeitszeitmodell);
+      if (urlaubswert > 0) {
+        // Feiertag auf Arbeitstag - überspringen (kostet keinen Urlaub)
+        current.setDate(current.getDate() + 1);
+        continue;
+      }
+    }
+    
+    // Berechne Urlaubswert für diesen Tag
+    const urlaubswert = berechneUrlaubstageWert(datumStr, arbeitszeitmodell);
+    
+    if (urlaubswert > 0) {
+      verbleibendeUrlaubstage -= urlaubswert;
+    }
+    
+    if (verbleibendeUrlaubstage > 0) {
+      current.setDate(current.getDate() + 1);
+    }
+  }
+  
+  return formatDatumLokal(current);
+}
+
+/**
+ * Alte Funktionen für Rückwärtskompatibilität (ohne Arbeitszeitmodell)
  */
 function berechneEndDatumNachArbeitstagen(vonDatum, arbeitstage) {
   const von = parseDatumLokal(vonDatum);
@@ -204,19 +362,13 @@ function berechneEndDatumNachArbeitstagen(vonDatum, arbeitstage) {
   return formatDatumLokal(current);
 }
 
-/**
- * Berechnet das End-Datum basierend auf Arbeitstagen (MIT Feiertagen)
- * ASYNCHRONE Version
- */
 async function berechneEndDatumNachArbeitstagenAsync(vonDatum, arbeitstage) {
   const von = parseDatumLokal(vonDatum);
   let verbleibendeArbeitstage = Math.floor(arbeitstage);
   const current = new Date(von);
   
-  // Schätze maximales Jahr (großzügig)
   const maxJahr = von.getFullYear() + 1;
   
-  // Lade Feiertage für relevante Jahre
   const alleFeiertage = new Set();
   for (let jahr = von.getFullYear(); jahr <= maxJahr; jahr++) {
     const feiertage = await ladeFeiertage(jahr);
@@ -227,7 +379,6 @@ async function berechneEndDatumNachArbeitstagenAsync(vonDatum, arbeitstage) {
     const dayOfWeek = current.getDay();
     const datumStr = formatDatumLokal(current);
     
-    // Nur zählen wenn kein Wochenende UND kein Feiertag
     if (dayOfWeek !== 0 && dayOfWeek !== 6 && !alleFeiertage.has(datumStr)) {
       verbleibendeArbeitstage--;
     }
@@ -280,8 +431,7 @@ class DialogBase {
   }
 
   /**
-   * Prüft ob Veranstaltungen im Zeitraum liegen
-   * FIX: Korrekte Behandlung des db.query() Rückgabewerts
+   * Prüft Veranstaltungen im Zeitraum
    */
   async pruefeVeranstaltungen(vonDatum, bisDatum) {
     try {
@@ -381,8 +531,7 @@ class DialogBase {
   }
 
   /**
-   * Prüft Kollegen-Abwesenheiten in der gleichen Abteilung
-   * FIX: Korrekte Behandlung aller db.query() Rückgabewerte
+   * Prüft Kollegen-Abwesenheiten
    */
   async pruefeKollegenAbwesenheiten(mitarbeiterId, vonDatum, bisDatum, typ) {
     try {
@@ -406,7 +555,6 @@ class DialogBase {
       const abwesenheiten = [];
 
       for (const kollege of kollegen) {
-        // Prüfe Urlaub
         const urlaubResult = await this.dataManager.db.query(`
           SELECT von_datum, bis_datum, tage
           FROM urlaub
@@ -428,7 +576,6 @@ class DialogBase {
           });
         }
 
-        // Prüfe Krankheit
         const krankheitResult = await this.dataManager.db.query(`
           SELECT von_datum, bis_datum, tage
           FROM krankheit
@@ -450,7 +597,6 @@ class DialogBase {
           });
         }
 
-        // Prüfe Schulung
         const schulungResult = await this.dataManager.db.query(`
           SELECT datum, dauer_tage, titel
           FROM schulung
@@ -526,15 +672,11 @@ class DialogBase {
   }
 
   /**
-   * Hilfsfunktion: Zeigt Modal an
-   * FIX: Robustere Initialisierung ohne setTimeout Race Condition
-   * FIX: Memory Leak durch korrektes dispose() behoben
+   * Zeigt Modal an
    */
   async showModal(html, onSave) {
-    // Entferne alte Modals
     const oldModals = document.querySelectorAll('.modal');
     oldModals.forEach(m => {
-      // Versuche Modal ordentlich zu schließen
       const existingModal = bootstrap.Modal.getInstance(m);
       if (existingModal) {
         existingModal.dispose();
@@ -542,14 +684,11 @@ class DialogBase {
       m.remove();
     });
 
-    // Entferne alte Backdrops
     const oldBackdrops = document.querySelectorAll('.modal-backdrop');
     oldBackdrops.forEach(b => b.remove());
 
-    // Füge neues Modal hinzu
     document.body.insertAdjacentHTML('beforeend', html);
 
-    // Modal initialisieren
     const modalElement = document.querySelector('.modal');
     if (!modalElement) {
       console.error('Modal-Element nicht gefunden');
@@ -558,11 +697,9 @@ class DialogBase {
 
     const modal = new bootstrap.Modal(modalElement);
 
-    // Speichern-Button
     const btnSpeichern = modalElement.querySelector('#btnSpeichern');
     if (btnSpeichern && onSave) {
       btnSpeichern.addEventListener('click', async () => {
-        // Deaktiviere Button während des Speicherns
         btnSpeichern.disabled = true;
         btnSpeichern.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Speichern...';
         
@@ -574,23 +711,19 @@ class DialogBase {
           console.error('Fehler beim Speichern:', error);
           showNotification('Fehler', error.message, 'danger');
         } finally {
-          // Button wieder aktivieren
           btnSpeichern.disabled = false;
           btnSpeichern.innerHTML = '<i class="bi bi-check-lg"></i> Speichern';
         }
       });
     }
 
-    // Modal anzeigen
     modal.show();
 
-    // Cleanup nach Schließen - FIX: dispose() hinzugefügt
     modalElement.addEventListener('hidden.bs.modal', () => {
       modal.dispose();
       modalElement.remove();
     });
 
-    // FIX: Warte auf Modal-Animation bevor Promise resolved
     return new Promise(resolve => {
       modalElement.addEventListener('shown.bs.modal', () => {
         resolve(modal);
@@ -605,9 +738,11 @@ if (typeof module !== 'undefined' && module.exports) {
     DialogBase, 
     showNotification, 
     berechneArbeitstage, 
-    berechneArbeitstageAsync, 
+    berechneArbeitstageAsync,
+    berechneUrlaubstageAsync,
     berechneEndDatumNachArbeitstagen, 
-    berechneEndDatumNachArbeitstagenAsync, 
+    berechneEndDatumNachArbeitstagenAsync,
+    berechneEndDatumNachUrlaubstagenAsync,
     getFeiertageImZeitraum, 
     invalidiereFeiertageCache,
     formatDatumLokal,
