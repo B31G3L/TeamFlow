@@ -2,19 +2,9 @@
  * Urlaub-Dialog
  * Urlaub eintragen mit Feiertags-Berücksichtigung
  * 
- * NEU: Berücksichtigt Arbeitszeitmodell (freie Tage = kein Urlaub, Halbtage = 0.5 Urlaub)
- * - Bei 4-Tage-Woche: ganze Woche = nur 4 Urlaubstage
- * - Bei Halbtagen: wird entsprechend anteilig berechnet
- * 
- * FIX: Korrigierte Urlaubstage-Berechnung
- * - VOLL oder HALB = 1 Urlaubstag (nicht 0.5!)
- * - Nur FREI-Tage zählen nicht
- * 
- * VERBESSERT: Austrittsdatum-Validierung
- * - Urlaub kann nicht nach Austrittsdatum eingetragen werden
- * - Proaktive Warnung bei baldiger Austritt
- * 
- * NEU: Halber Tag Button hinzugefügt
+ * FIX: Halbe Tage werden jetzt korrekt als 0.5 Tage angezeigt und gespeichert
+ * - Bei Auswahl "Halber Tag": Von-Datum = Bis-Datum, Anzeige = 0.5 Tage
+ * - Speicherung erfolgt mit 0.5 Tagen
  */
 
 class UrlaubDialog extends DialogBase {
@@ -135,8 +125,9 @@ class UrlaubDialog extends DialogBase {
       const vonDatum = document.getElementById('vonDatum').value;
       const bisDatum = document.getElementById('bisDatum').value;
       
-      // Berechne Urlaubstage MIT Arbeitszeitmodell
-      const tage = await this._berechneUrlaubstage(vonDatum, bisDatum, mitarbeiterId);
+      // FIX: Lese die angezeigte Anzahl Tage direkt aus der Anzeige
+      const dauerAnzeige = document.getElementById('dauerAnzeige').textContent;
+      const tage = parseFloat(dauerAnzeige);
 
       if (isNaN(tage) || tage <= 0) {
         showNotification('Fehler', 'Ungültige Anzahl Urlaubstage', 'danger');
@@ -153,7 +144,7 @@ class UrlaubDialog extends DialogBase {
         typ: 'urlaub',
         mitarbeiter_id: mitarbeiterId,
         datum: vonDatum,
-        wert: tage,
+        wert: tage, // FIX: Verwende direkt den angezeigten Wert (0.5 bei halbem Tag)
         beschreibung: document.getElementById('notiz').value || null
       };
 
@@ -174,14 +165,12 @@ class UrlaubDialog extends DialogBase {
 
   /**
    * Berechnet Urlaubstage mit Arbeitszeitmodell
-   * WICHTIG: Jeder Arbeitstag (VOLL oder HALB) = 1 Urlaubstag
-   * NEU: Validiert Austrittsdatum
    */
   async _berechneUrlaubstage(vonDatum, bisDatum, mitarbeiterId) {
     const von = new Date(vonDatum + 'T00:00:00');
     const bis = new Date(bisDatum + 'T00:00:00');
     
-    // NEU: Validiere Austrittsdatum
+    // Validiere Austrittsdatum
     const mitarbeiter = await this.dataManager.getMitarbeiter(mitarbeiterId);
     if (!mitarbeiter) {
       throw new Error('Mitarbeiter nicht gefunden');
@@ -190,7 +179,6 @@ class UrlaubDialog extends DialogBase {
     if (mitarbeiter.austrittsdatum) {
       const austritt = new Date(mitarbeiter.austrittsdatum + 'T00:00:00');
       
-      // Prüfe ob Urlaubsbeginn nach Austritt liegt
       if (von > austritt) {
         const austrittFormatiert = this._formatDatumAnzeige(mitarbeiter.austrittsdatum);
         throw new Error(
@@ -199,10 +187,8 @@ class UrlaubDialog extends DialogBase {
         );
       }
       
-      // Prüfe ob Urlaubsende nach Austritt liegt
       if (bis > austritt) {
         const austrittFormatiert = this._formatDatumAnzeige(mitarbeiter.austrittsdatum);
-        const vonFormatiert = this._formatDatumAnzeige(vonDatum);
         throw new Error(
           `Urlaubsende (${this._formatDatumAnzeige(bisDatum)}) liegt nach dem Austrittsdatum (${austrittFormatiert}). ` +
           `Bitte wählen Sie einen früheren End-Termin oder tragen Sie den Urlaub nur bis zum ${austrittFormatiert} ein.`
@@ -237,9 +223,7 @@ class UrlaubDialog extends DialogBase {
       // Prüfe ob Feiertag (der auf einen Arbeitstag fällt)
       if (alleFeiertage.has(datumStr)) {
         const urlaubswert = this._berechneUrlaubstageWert(datumStr, arbeitszeitmodell);
-        // Feiertag zählt nur wenn es ein Arbeitstag wäre
         if (urlaubswert > 0) {
-          // Feiertag wird NICHT als Urlaub gezählt
           checkDate.setDate(checkDate.getDate() + 1);
           continue;
         }
@@ -255,37 +239,26 @@ class UrlaubDialog extends DialogBase {
     return urlaubstage;
   }
 
-  /**
-   * Berechnet wie viele Urlaubstage ein Tag wert ist
-   * WICHTIG: VOLL oder HALB = 1 Tag (nicht 0.5!)
-   */
   _berechneUrlaubstageWert(datum, arbeitszeitmodell) {
     const date = new Date(datum + 'T00:00:00');
-    const wochentag = date.getDay(); // 0 = Sonntag, 1 = Montag, ..., 6 = Samstag
-    
-    // Konvertiere zu unserem System (0 = Montag, 6 = Sonntag)
+    const wochentag = date.getDay();
     const wochentagIndex = wochentag === 0 ? 6 : wochentag - 1;
     
-    // Wenn kein Arbeitszeitmodell, Standard: Mo-Fr = VOLL, Sa-So = FREI
     if (!arbeitszeitmodell || arbeitszeitmodell.length === 0) {
-      return wochentagIndex < 5 ? 1.0 : 0; // Mo-Fr = 1.0, Sa-So = 0
+      return wochentagIndex < 5 ? 1.0 : 0;
     }
     
-    // Finde Modell für diesen Wochentag
     const tagModell = arbeitszeitmodell.find(m => m.wochentag === wochentagIndex);
     
-    // Wenn kein Modell für diesen Tag definiert, Standard: Mo-Fr = VOLL
     if (!tagModell) {
       return wochentagIndex < 5 ? 1.0 : 0;
     }
     
-    // WICHTIG: VOLL oder HALB = 1 Urlaubstag!
-    // Nach Arbeitszeit-Typ
     switch (tagModell.arbeitszeit) {
       case 'VOLL':
         return 1.0;
       case 'HALB':
-        return 1.0;  // FIX: Halbtag zählt auch als 1 Urlaubstag!
+        return 1.0;
       case 'FREI':
         return 0;
       default:
@@ -293,9 +266,6 @@ class UrlaubDialog extends DialogBase {
     }
   }
 
-  /**
-   * Lädt Feiertage für ein Jahr
-   */
   async _ladeFeiertage(jahr) {
     try {
       const result = await this.dataManager.db.query(`
@@ -314,9 +284,6 @@ class UrlaubDialog extends DialogBase {
     }
   }
 
-  /**
-   * Formatiert Datum als ISO-String (YYYY-MM-DD)
-   */
   _formatDatumISO(date) {
     const jahr = date.getFullYear();
     const monat = String(date.getMonth() + 1).padStart(2, '0');
@@ -324,31 +291,20 @@ class UrlaubDialog extends DialogBase {
     return `${jahr}-${monat}-${tag}`;
   }
 
-  /**
-   * Formatiert Datum für Anzeige (DD.MM.YYYY)
-   * NEU: Für Fehlermeldungen und Warnungen
-   */
   _formatDatumAnzeige(datumStr) {
     if (!datumStr) return '-';
     const [jahr, monat, tag] = datumStr.split('-').map(Number);
     return `${String(tag).padStart(2, '0')}.${String(monat).padStart(2, '0')}.${jahr}`;
   }
 
-  /**
-   * Berechnet End-Datum nach Urlaubstagen
-   */
   async _berechneEndDatumNachUrlaubstagen(vonDatum, urlaubstage, mitarbeiterId) {
     const von = new Date(vonDatum + 'T00:00:00');
     let verbleibendeUrlaubstage = urlaubstage;
     const current = new Date(von);
     
-    // Lade Arbeitszeitmodell
     const arbeitszeitmodell = await this.dataManager.getArbeitszeitmodell(mitarbeiterId);
-    
-    // Schätze maximales Jahr
     const maxJahr = von.getFullYear() + 1;
     
-    // Lade Feiertage
     const alleFeiertage = new Set();
     for (let jahr = von.getFullYear(); jahr <= maxJahr; jahr++) {
       const feiertage = await this._ladeFeiertage(jahr);
@@ -358,17 +314,14 @@ class UrlaubDialog extends DialogBase {
     while (verbleibendeUrlaubstage > 0) {
       const datumStr = this._formatDatumISO(current);
       
-      // Prüfe ob Feiertag
       if (alleFeiertage.has(datumStr)) {
         const urlaubswert = this._berechneUrlaubstageWert(datumStr, arbeitszeitmodell);
         if (urlaubswert > 0) {
-          // Feiertag auf Arbeitstag - überspringen (kostet keinen Urlaub)
           current.setDate(current.getDate() + 1);
           continue;
         }
       }
       
-      // Berechne Urlaubswert für diesen Tag
       const urlaubswert = this._berechneUrlaubstageWert(datumStr, arbeitszeitmodell);
       
       if (urlaubswert > 0) {
@@ -385,7 +338,7 @@ class UrlaubDialog extends DialogBase {
 
   /**
    * Initialisiert Event-Listener für Urlaub-Dialog
-   * NEU: Mit Austrittsdatum-Warnung
+   * FIX: Halbe Tage werden jetzt korrekt behandelt
    */
   async _initUrlaubEventListener(mitarbeiterId, restUrlaub) {
     const vonDatumInput = document.getElementById('vonDatum');
@@ -404,9 +357,6 @@ class UrlaubDialog extends DialogBase {
       return;
     }
 
-    /**
-     * Prüft ob die gewählten Tage den Resturlaub übersteigen
-     */
     const pruefeUrlaubGrenze = (tage) => {
       if (tage > restUrlaub) {
         if (urlaubWarnung) urlaubWarnung.classList.remove('d-none');
@@ -452,12 +402,10 @@ class UrlaubDialog extends DialogBase {
         const urlaubstage = await this._berechneUrlaubstage(von, bis, mitarbeiterId);
         dauerAnzeige.textContent = urlaubstage;
         
-        // Zeige Info wenn Arbeitszeitmodell Auswirkungen hat
         const vonDate = new Date(von + 'T00:00:00');
         const bisDate = new Date(bis + 'T00:00:00');
         const kalenderTage = Math.ceil((bisDate - vonDate) / (1000 * 60 * 60 * 24)) + 1;
         
-        // WICHTIG: Bei halben Tagen (0.5) keine Warnung anzeigen
         if (urlaubstage >= 1 && urlaubstage < kalenderTage) {
           if (arbeitszeitInfo && arbeitszeitInfoText) {
             arbeitszeitInfo.classList.remove('d-none');
@@ -468,29 +416,24 @@ class UrlaubDialog extends DialogBase {
           if (arbeitszeitInfo) arbeitszeitInfo.classList.add('d-none');
         }
         
-        // Prüfe Urlaubsgrenze
         pruefeUrlaubGrenze(urlaubstage);
 
-        // Hole Feiertage im Zeitraum für Anzeige
         if (feiertagsHinweiseDiv) {
           const feiertage = await getFeiertageImZeitraum(von, bis);
           feiertagsHinweiseDiv.innerHTML = this.erstelleFeiertagsHinweisHTML(feiertage);
         }
 
-        // Prüfe Veranstaltungen
         if (veranstaltungsHinweiseDiv) {
           const veranstaltungen = await this.pruefeVeranstaltungen(von, bis);
           veranstaltungsHinweiseDiv.innerHTML = this.erstelleVeranstaltungsHinweisHTML(veranstaltungen);
         }
 
-        // Prüfe Kollegen-Abwesenheiten
         if (kollegenHinweiseDiv) {
           const abwesenheiten = await this.pruefeKollegenAbwesenheiten(mitarbeiterId, von, bis, 'urlaub');
           kollegenHinweiseDiv.innerHTML = this.erstelleKollegenHinweisHTML(abwesenheiten);
         }
       } catch (error) {
         console.error('Fehler beim Aktualisieren der Hinweise:', error);
-        // Zeige Fehler im Dialog
         if (feiertagsHinweiseDiv) {
           feiertagsHinweiseDiv.innerHTML = `
             <div class="alert alert-danger">
@@ -499,7 +442,6 @@ class UrlaubDialog extends DialogBase {
             </div>
           `;
         }
-        // Deaktiviere Speichern-Button
         if (btnSpeichern) {
           btnSpeichern.disabled = true;
           btnSpeichern.classList.add('btn-secondary');
@@ -508,7 +450,6 @@ class UrlaubDialog extends DialogBase {
       }
     };
 
-    // Event-Listener
     vonDatumInput.addEventListener('change', async () => {
       bisDatumInput.min = vonDatumInput.value;
       
@@ -521,20 +462,16 @@ class UrlaubDialog extends DialogBase {
 
     bisDatumInput.addEventListener('change', aktualisiereHinweise);
 
-    // Setze initiales min für Bis-Datum
     bisDatumInput.min = vonDatumInput.value;
 
-    // Initial prüfen
     await aktualisiereHinweise();
 
-    // NEU: Zeige Warnung bei baldiger Austrittsdatum
     const mitarbeiter = await this.dataManager.getMitarbeiter(mitarbeiterId);
     if (mitarbeiter && mitarbeiter.austrittsdatum) {
       const austritt = new Date(mitarbeiter.austrittsdatum + 'T00:00:00');
       const heute = new Date();
       heute.setHours(0, 0, 0, 0);
       
-      // Zeige Warnung wenn Austrittsdatum innerhalb der nächsten 6 Monate liegt
       const sechsMonate = new Date(heute);
       sechsMonate.setMonth(sechsMonate.getMonth() + 6);
       
@@ -554,7 +491,7 @@ class UrlaubDialog extends DialogBase {
       }
     }
 
-    // Dauer-Buttons - mit Arbeitszeitmodell
+    // FIX: Dauer-Buttons - mit korrekter Behandlung für halbe Tage
     document.querySelectorAll('.dauer-btn').forEach(btn => {
       btn.addEventListener('click', async () => {
         const tage = parseFloat(btn.dataset.tage);
@@ -563,20 +500,16 @@ class UrlaubDialog extends DialogBase {
         if (!von) return;
 
         try {
-          // SPEZIALFALL: Halber Tag (0.5)
+          // FIX: SPEZIALFALL für halben Tag - setze Bis-Datum = Von-Datum und Anzeige = 0.5
           if (tage === 0.5) {
-            // Bis-Datum = Von-Datum (gleicher Tag)
             bisDatumInput.value = von;
-            dauerAnzeige.textContent = '0.5';
+            dauerAnzeige.textContent = '0.5'; // FIX: Zeige 0.5 Tage an
             
-            // Prüfe Urlaubsgrenze
             pruefeUrlaubGrenze(0.5);
             
-            // Keine Feiertags- oder Arbeitszeitmodell-Hinweise bei halbem Tag
             if (feiertagsHinweiseDiv) feiertagsHinweiseDiv.innerHTML = '';
             if (arbeitszeitInfo) arbeitszeitInfo.classList.add('d-none');
             
-            // Prüfe Kollegen trotzdem
             if (kollegenHinweiseDiv) {
               const abwesenheiten = await this.pruefeKollegenAbwesenheiten(
                 mitarbeiterId, 
@@ -591,11 +524,9 @@ class UrlaubDialog extends DialogBase {
           }
           
           // Normaler Fall: Ganze Tage
-          // Berechne Enddatum MIT Arbeitszeitmodell
           const bis = await this._berechneEndDatumNachUrlaubstagen(von, tage, mitarbeiterId);
           bisDatumInput.value = bis;
           
-          // Aktualisiere Hinweise
           await aktualisiereHinweise();
         } catch (error) {
           console.error('Fehler bei Dauer-Button:', error);
@@ -606,7 +537,6 @@ class UrlaubDialog extends DialogBase {
   }
 }
 
-// Export für Node.js
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = UrlaubDialog;
 }

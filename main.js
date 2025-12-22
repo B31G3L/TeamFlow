@@ -8,6 +8,7 @@
  * NEU: Arbeitszeitmodelle für Mitarbeiter
  * VERBESSERT: Datenbankindizes für Performance
  * VERBESSERT: Security-Fix für fs:writeFile
+ * FIX: Menüleiste (File, Edit, etc.) wird ausgeblendet
  */
 
 const { app, BrowserWindow, ipcMain, dialog } = require('electron');
@@ -470,6 +471,7 @@ function createDefaultDepartments() {
 
 /**
  * Erstellt das Hauptfenster
+ * FIX: Menüleiste wird ausgeblendet
  */
 function createWindow() {
   logger.info('🪟 Erstelle Hauptfenster...');
@@ -486,7 +488,8 @@ function createWindow() {
     },
     icon: path.join(__dirname, 'src/assets/logo.png'),
     backgroundColor: '#1a1a1a',
-    show: false
+    show: false,
+    autoHideMenuBar: true // FIX: Blendet die Menüleiste (File, Edit, etc.) aus
   });
 
   // HTML laden

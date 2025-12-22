@@ -383,7 +383,7 @@ class DetailDialog extends DialogBase {
     this._initActionListeners(modalElement, mitarbeiterId, modal, jahr);
     this._initFilterUndSortierung(modalElement, alleEintraegeSortiert);
     this._initClickHandlers(modalElement, mitarbeiterId, modal, jahr);
-    this._initJahrNavigation(modalElement, mitarbeiterId, modal); // NEU: Jahr-Navigation
+    this._initJahrNavigation(modalElement, mitarbeiterId, modal, jahr); // NEU: Jahr-Navigation mit korrektem Jahr
 
     // Lade und zeige Arbeitszeitmodell
     await this._ladeUndZeigeArbeitszeitmodell(mitarbeiterId);
@@ -401,29 +401,28 @@ class DetailDialog extends DialogBase {
 
   /**
    * NEU: Initialisiert Jahr-Navigation Buttons
+   * FIX: Jahr wird jetzt explizit übergeben statt aus dataManager zu lesen
    */
-  _initJahrNavigation(modalElement, mitarbeiterId, modal) {
+  _initJahrNavigation(modalElement, mitarbeiterId, modal, anzeigeJahr) {
     const btnVoriges = modalElement.querySelector('#btnVorigesJahr');
     const btnNaechstes = modalElement.querySelector('#btnNaechstesJahr');
 
     if (btnVoriges) {
       btnVoriges.addEventListener('click', async () => {
-        const aktuellesJahr = this.dataManager.aktuellesJahr;
         modal.hide();
         // Kurze Verzögerung damit Modal richtig geschlossen wird
         setTimeout(() => {
-          this.zeigeDetails(mitarbeiterId, aktuellesJahr - 1);
+          this.zeigeDetails(mitarbeiterId, anzeigeJahr - 1);
         }, 300);
       });
     }
 
     if (btnNaechstes) {
       btnNaechstes.addEventListener('click', async () => {
-        const aktuellesJahr = this.dataManager.aktuellesJahr;
         modal.hide();
         // Kurze Verzögerung damit Modal richtig geschlossen wird
         setTimeout(() => {
-          this.zeigeDetails(mitarbeiterId, aktuellesJahr + 1);
+          this.zeigeDetails(mitarbeiterId, anzeigeJahr + 1);
         }, 300);
       });
     }
