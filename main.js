@@ -6,6 +6,8 @@
  * 
  * NEU: Integrierter Logger (ohne externe Abhängigkeit)
  * NEU: Arbeitszeitmodelle für Mitarbeiter
+ * VERBESSERT: Datenbankindizes für Performance
+ * VERBESSERT: Security-Fix für fs:writeFile
  */
 
 const { app, BrowserWindow, ipcMain, dialog } = require('electron');
@@ -359,6 +361,9 @@ function createTables() {
       logger.warn('⚠️ Migration wochenstunden übersprungen', { error: error.message });
     }
 
+    // NEU: Indizes für Performance erstellen
+    createIndexes();
+    
     // Standard-Abteilungen erstellen
     createDefaultDepartments();
     
@@ -369,6 +374,64 @@ function createTables() {
       stack: error.stack
     });
     throw error;
+  }
+}
+
+/**
+ * Erstellt Datenbankindizes für Performance
+ * NEU: Optimiert häufige Abfragen
+ */
+function createIndexes() {
+  logger.debug('🔍 Erstelle Datenbankindizes...');
+  
+  try {
+    // Index für Urlaubsabfragen nach Mitarbeiter und Jahr
+    db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_urlaub_mitarbeiter_jahr 
+      ON urlaub(mitarbeiter_id, von_datum)
+    `);
+    
+    // Index für Krankheitsabfragen nach Mitarbeiter und Jahr
+    db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_krankheit_mitarbeiter_jahr 
+      ON krankheit(mitarbeiter_id, von_datum)
+    `);
+    
+    // Index für Schulungsabfragen nach Mitarbeiter und Jahr
+    db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_schulung_mitarbeiter_jahr 
+      ON schulung(mitarbeiter_id, datum)
+    `);
+    
+    // Index für Überstundenabfragen nach Mitarbeiter und Jahr
+    db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_ueberstunden_mitarbeiter_jahr 
+      ON ueberstunden(mitarbeiter_id, datum)
+    `);
+    
+    // Index für Feiertagsabfragen nach Datum
+    db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_feiertage_datum 
+      ON feiertage(datum)
+    `);
+    
+    // Index für Veranstaltungsabfragen nach Zeitraum
+    db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_veranstaltungen_zeitraum 
+      ON veranstaltungen(von_datum, bis_datum)
+    `);
+    
+    // Index für Mitarbeiter nach Abteilung und Status
+    db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_mitarbeiter_abteilung_status 
+      ON mitarbeiter(abteilung_id, status, austrittsdatum)
+    `);
+    
+    logger.success('✅ Datenbankindizes erstellt');
+  } catch (error) {
+    logger.warn('⚠️ Fehler beim Erstellen der Indizes (möglicherweise bereits vorhanden)', {
+      error: error.message
+    });
   }
 }
 
@@ -492,6 +555,34 @@ app.on('window-all-closed', () => {
 });
 
 /**
+ * Validiert ob ein Dateipfad sicher ist
+ * SECURITY: Verhindert Path-Traversal-Angriffe
+ */
+function isPathSafe(filePath) {
+  try {
+    const normalized = path.normalize(filePath);
+    const resolved = path.resolve(normalized);
+    
+    // Erlaubte Verzeichnisse
+    const allowedDirs = [
+      app.getPath('documents'),
+      app.getPath('downloads'),
+      app.getPath('desktop'),
+      app.getPath('temp')
+    ];
+    
+    // Prüfe ob Pfad in einem erlaubten Verzeichnis liegt
+    return allowedDirs.some(dir => {
+      const resolvedDir = path.resolve(dir);
+      return resolved.startsWith(resolvedDir);
+    });
+  } catch (error) {
+    logger.error('❌ Fehler bei Path-Validierung', { error: error.message, path: filePath });
+    return false;
+  }
+}
+
+/**
  * IPC Handlers - Datei-Dialoge
  */
 ipcMain.handle('dialog:saveFile', async (event, options) => {
@@ -510,9 +601,23 @@ ipcMain.handle('dialog:openFile', async (event, options) => {
 
 ipcMain.handle('fs:writeFile', async (event, filePath, data) => {
   logger.info('📝 Schreibe Datei', { path: filePath, size: data.length });
+  
   try {
+    // SECURITY: Validiere Pfad
+    if (!isPathSafe(filePath)) {
+      const error = 'Ungültiger Dateipfad: Zugriff verweigert';
+      logger.error('🚨 Security: Ungültiger Dateipfad blockiert', { path: filePath });
+      return { success: false, error };
+    }
+    
+    // Stelle sicher, dass das Verzeichnis existiert
+    const dir = path.dirname(filePath);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    
     fs.writeFileSync(filePath, data, 'utf8');
-    logger.success('✅ Datei erfolgreich geschrieben');
+    logger.success('✅ Datei erfolgreich geschrieben', { path: filePath });
     return { success: true };
   } catch (error) {
     logger.error('❌ Fehler beim Schreiben der Datei', {

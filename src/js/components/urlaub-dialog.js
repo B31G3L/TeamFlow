@@ -9,6 +9,10 @@
  * FIX: Korrigierte Urlaubstage-Berechnung
  * - VOLL oder HALB = 1 Urlaubstag (nicht 0.5!)
  * - Nur FREI-Tage zählen nicht
+ * 
+ * VERBESSERT: Austrittsdatum-Validierung
+ * - Urlaub kann nicht nach Austrittsdatum eingetragen werden
+ * - Proaktive Warnung bei baldiger Austritt
  */
 
 class UrlaubDialog extends DialogBase {
@@ -44,6 +48,9 @@ class UrlaubDialog extends DialogBase {
                   <span class="fs-5 fw-bold" id="restUrlaubAnzeige">${restUrlaub.toFixed(1)} Tage</span>
                 </div>
               </div>
+
+              <!-- Austrittsdatum-Warnung Container -->
+              <div id="austrittsWarnung"></div>
 
               <form id="urlaubForm">
                 <div class="row">
@@ -165,10 +172,40 @@ class UrlaubDialog extends DialogBase {
   /**
    * Berechnet Urlaubstage mit Arbeitszeitmodell
    * WICHTIG: Jeder Arbeitstag (VOLL oder HALB) = 1 Urlaubstag
+   * NEU: Validiert Austrittsdatum
    */
   async _berechneUrlaubstage(vonDatum, bisDatum, mitarbeiterId) {
     const von = new Date(vonDatum + 'T00:00:00');
     const bis = new Date(bisDatum + 'T00:00:00');
+    
+    // NEU: Validiere Austrittsdatum
+    const mitarbeiter = await this.dataManager.getMitarbeiter(mitarbeiterId);
+    if (!mitarbeiter) {
+      throw new Error('Mitarbeiter nicht gefunden');
+    }
+    
+    if (mitarbeiter.austrittsdatum) {
+      const austritt = new Date(mitarbeiter.austrittsdatum + 'T00:00:00');
+      
+      // Prüfe ob Urlaubsbeginn nach Austritt liegt
+      if (von > austritt) {
+        const austrittFormatiert = this._formatDatumAnzeige(mitarbeiter.austrittsdatum);
+        throw new Error(
+          `Urlaubsbeginn liegt nach dem Austrittsdatum (${austrittFormatiert}). ` +
+          `Urlaub kann nur bis zum Austrittsdatum eingetragen werden.`
+        );
+      }
+      
+      // Prüfe ob Urlaubsende nach Austritt liegt
+      if (bis > austritt) {
+        const austrittFormatiert = this._formatDatumAnzeige(mitarbeiter.austrittsdatum);
+        const vonFormatiert = this._formatDatumAnzeige(vonDatum);
+        throw new Error(
+          `Urlaubsende (${this._formatDatumAnzeige(bisDatum)}) liegt nach dem Austrittsdatum (${austrittFormatiert}). ` +
+          `Bitte wählen Sie einen früheren End-Termin oder tragen Sie den Urlaub nur bis zum ${austrittFormatiert} ein.`
+        );
+      }
+    }
     
     // Lade Arbeitszeitmodell
     const arbeitszeitmodell = await this.dataManager.getArbeitszeitmodell(mitarbeiterId);
@@ -285,6 +322,16 @@ class UrlaubDialog extends DialogBase {
   }
 
   /**
+   * Formatiert Datum für Anzeige (DD.MM.YYYY)
+   * NEU: Für Fehlermeldungen und Warnungen
+   */
+  _formatDatumAnzeige(datumStr) {
+    if (!datumStr) return '-';
+    const [jahr, monat, tag] = datumStr.split('-').map(Number);
+    return `${String(tag).padStart(2, '0')}.${String(monat).padStart(2, '0')}.${jahr}`;
+  }
+
+  /**
    * Berechnet End-Datum nach Urlaubstagen
    */
   async _berechneEndDatumNachUrlaubstagen(vonDatum, urlaubstage, mitarbeiterId) {
@@ -335,6 +382,7 @@ class UrlaubDialog extends DialogBase {
 
   /**
    * Initialisiert Event-Listener für Urlaub-Dialog
+   * NEU: Mit Austrittsdatum-Warnung
    */
   async _initUrlaubEventListener(mitarbeiterId, restUrlaub) {
     const vonDatumInput = document.getElementById('vonDatum');
@@ -438,6 +486,21 @@ class UrlaubDialog extends DialogBase {
         }
       } catch (error) {
         console.error('Fehler beim Aktualisieren der Hinweise:', error);
+        // Zeige Fehler im Dialog
+        if (feiertagsHinweiseDiv) {
+          feiertagsHinweiseDiv.innerHTML = `
+            <div class="alert alert-danger">
+              <i class="bi bi-exclamation-triangle"></i>
+              <strong>Fehler:</strong> ${error.message}
+            </div>
+          `;
+        }
+        // Deaktiviere Speichern-Button
+        if (btnSpeichern) {
+          btnSpeichern.disabled = true;
+          btnSpeichern.classList.add('btn-secondary');
+          btnSpeichern.classList.remove('btn-success');
+        }
       }
     };
 
@@ -460,6 +523,33 @@ class UrlaubDialog extends DialogBase {
     // Initial prüfen
     await aktualisiereHinweise();
 
+    // NEU: Zeige Warnung bei baldiger Austrittsdatum
+    const mitarbeiter = await this.dataManager.getMitarbeiter(mitarbeiterId);
+    if (mitarbeiter && mitarbeiter.austrittsdatum) {
+      const austritt = new Date(mitarbeiter.austrittsdatum + 'T00:00:00');
+      const heute = new Date();
+      heute.setHours(0, 0, 0, 0);
+      
+      // Zeige Warnung wenn Austrittsdatum innerhalb der nächsten 6 Monate liegt
+      const sechsMonate = new Date(heute);
+      sechsMonate.setMonth(sechsMonate.getMonth() + 6);
+      
+      if (austritt <= sechsMonate && austritt >= heute) {
+        const austrittFormatiert = this._formatDatumAnzeige(mitarbeiter.austrittsdatum);
+        const warningDiv = document.getElementById('austrittsWarnung');
+        
+        if (warningDiv) {
+          warningDiv.innerHTML = `
+            <div class="alert alert-warning">
+              <i class="bi bi-exclamation-triangle"></i>
+              <strong>Hinweis:</strong> Mitarbeiter tritt am <strong>${austrittFormatiert}</strong> aus. 
+              Urlaub kann nur bis zu diesem Datum eingetragen werden.
+            </div>
+          `;
+        }
+      }
+    }
+
     // Dauer-Buttons - mit Arbeitszeitmodell
     document.querySelectorAll('.dauer-btn').forEach(btn => {
       btn.addEventListener('click', async () => {
@@ -477,6 +567,7 @@ class UrlaubDialog extends DialogBase {
           await aktualisiereHinweise();
         } catch (error) {
           console.error('Fehler bei Dauer-Button:', error);
+          showNotification('Fehler', error.message, 'danger');
         }
       });
     });

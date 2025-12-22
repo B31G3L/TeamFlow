@@ -12,7 +12,6 @@
  * NEU:
  * - Filter für Mitarbeiter nach Austrittsjahr
  * - Manueller Übertrag kann gesetzt werden
- * - Arbeitszeitmodell-Verwaltung
  */
 
 class TeamplannerDataManager {
@@ -208,132 +207,6 @@ class TeamplannerDataManager {
       throw error;
     }
   }
-
-  // ==================== ARBEITSZEITMODELL (NEU) ====================
-
-  /**
-   * Gibt Arbeitszeitmodell für einen Mitarbeiter zurück
-   * NEU: Für Teilzeit-Mitarbeiter
-   */
-  async getArbeitszeitmodell(mitarbeiterId) {
-    const result = await this.db.query(`
-      SELECT * FROM arbeitszeitmodell 
-      WHERE mitarbeiter_id = ?
-      ORDER BY wochentag
-    `, [mitarbeiterId]);
-    
-    return result.success ? result.data : [];
-  }
-
-  /**
-   * Speichert Arbeitszeitmodell für einen Mitarbeiter
-   * NEU: Speichert Wochenstunden und Wochenplan
-   */
-  async speichereArbeitszeitmodell(mitarbeiterId, wochenstunden, wochenplan) {
-    try {
-      // Aktualisiere Wochenstunden in Mitarbeiter-Tabelle
-      const updateResult = await this.db.run(`
-        UPDATE mitarbeiter 
-        SET wochenstunden = ?, aktualisiert_am = CURRENT_TIMESTAMP
-        WHERE id = ?
-      `, [wochenstunden, mitarbeiterId]);
-
-      if (!updateResult.success) {
-        throw new Error(updateResult.error);
-      }
-
-      // Lösche altes Arbeitszeitmodell
-      await this.db.run(`
-        DELETE FROM arbeitszeitmodell WHERE mitarbeiter_id = ?
-      `, [mitarbeiterId]);
-
-      // Füge neues Arbeitszeitmodell ein
-      const stmt = `
-        INSERT INTO arbeitszeitmodell (mitarbeiter_id, wochentag, arbeitszeit)
-        VALUES (?, ?, ?)
-      `;
-
-      for (const tag of wochenplan) {
-        const result = await this.db.run(stmt, [
-          mitarbeiterId,
-          tag.wochentag,
-          tag.arbeitszeit
-        ]);
-
-        if (!result.success) {
-          throw new Error(result.error);
-        }
-      }
-
-      this.invalidateCache();
-      return true;
-    } catch (error) {
-      console.error('Fehler beim Speichern des Arbeitszeitmodells:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Berechnet ob ein Tag ein Arbeitstag ist für einen Mitarbeiter
-   * NEU: Berücksichtigt Arbeitszeitmodell
-   */
-  async istArbeitstag(mitarbeiterId, datum) {
-    const date = this._parseDatumLokal(datum);
-    const wochentag = date.getDay(); // 0 = Sonntag, 1 = Montag, ..., 6 = Samstag
-    
-    // Konvertiere zu unserem System (0 = Montag, 6 = Sonntag)
-    const wochentagIndex = wochentag === 0 ? 6 : wochentag - 1;
-    
-    // Lade Arbeitszeitmodell
-    const modell = await this.getArbeitszeitmodell(mitarbeiterId);
-    const tagModell = modell.find(m => m.wochentag === wochentagIndex);
-    
-    // Wenn kein Modell definiert, Standard: Mo-Fr = VOLL, Sa-So = FREI
-    if (!tagModell) {
-      return wochentagIndex < 5; // Mo-Fr
-    }
-    
-    return tagModell.arbeitszeit !== 'FREI';
-  }
-
-  /**
-   * Berechnet Arbeitsstunden für einen Tag
-   * NEU: Berücksichtigt Halbtage
-   */
-  async getArbeitsstundenFuerTag(mitarbeiterId, datum) {
-    const mitarbeiter = await this.getMitarbeiter(mitarbeiterId);
-    if (!mitarbeiter) return 0;
-    
-    const date = this._parseDatumLokal(datum);
-    const wochentag = date.getDay();
-    const wochentagIndex = wochentag === 0 ? 6 : wochentag - 1;
-    
-    // Lade Arbeitszeitmodell
-    const modell = await this.getArbeitszeitmodell(mitarbeiterId);
-    const tagModell = modell.find(m => m.wochentag === wochentagIndex);
-    
-    // Standard-Stunden pro Tag (40h / 5 Tage = 8h)
-    const stundenProTag = (mitarbeiter.wochenstunden || 40) / 5;
-    
-    // Wenn kein Modell, Standard: Mo-Fr voll, Sa-So frei
-    if (!tagModell) {
-      return wochentagIndex < 5 ? stundenProTag : 0;
-    }
-    
-    // Nach Modell
-    switch (tagModell.arbeitszeit) {
-      case 'VOLL':
-        return stundenProTag;
-      case 'HALB':
-        return stundenProTag * 0.5;
-      case 'FREI':
-        return 0;
-      default:
-        return stundenProTag;
-    }
-  }
-
-  // ==================== ENDE ARBEITSZEITMODELL ====================
 
   /**
    * Gibt manuellen Übertrag für ein Jahr zurück (falls vorhanden)
@@ -606,7 +479,6 @@ class TeamplannerDataManager {
   /**
    * Fügt Mitarbeiter hinzu
    * FIX: Korrekte Fehlerbehandlung + ID-Sanitierung
-   * NEU: Wochenstunden hinzugefügt
    */
   async stammdatenHinzufuegen(mitarbeiterId, daten) {
     try {
@@ -620,8 +492,8 @@ class TeamplannerDataManager {
       const sql = `
         INSERT INTO mitarbeiter (
           id, abteilung_id, vorname, nachname, email,
-          geburtsdatum, eintrittsdatum, urlaubstage_jahr, wochenstunden, status
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'AKTIV')
+          geburtsdatum, eintrittsdatum, urlaubstage_jahr, status
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'AKTIV')
       `;
 
       const result = await this.db.run(sql, [
@@ -632,8 +504,7 @@ class TeamplannerDataManager {
         daten.email || null,
         daten.geburtsdatum || null,
         daten.einstellungsdatum || new Date().toISOString().split('T')[0],
-        daten.urlaubstage_jahr || 30,
-        daten.wochenstunden || 40
+        daten.urlaubstage_jahr || 30
       ]);
 
       if (!result.success) {
@@ -651,7 +522,6 @@ class TeamplannerDataManager {
   /**
    * Aktualisiert Mitarbeiter
    * FIX: Korrekte Fehlerbehandlung
-   * NEU: Wochenstunden hinzugefügt
    */
   async stammdatenAktualisieren(mitarbeiterId, daten) {
     try {
@@ -692,10 +562,6 @@ class TeamplannerDataManager {
       if (daten.urlaubstage_jahr !== undefined) {
         updates.push('urlaubstage_jahr = ?');
         values.push(daten.urlaubstage_jahr);
-      }
-      if (daten.wochenstunden !== undefined) {
-        updates.push('wochenstunden = ?');
-        values.push(daten.wochenstunden);
       }
 
       if (updates.length === 0) return true;
