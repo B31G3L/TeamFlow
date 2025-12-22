@@ -3,6 +3,10 @@
  * Zeigt alle Einträge eines Mitarbeiters für ein Jahr an
  * Ermöglicht das Bearbeiten und Löschen von Einträgen
  * 
+ * FIXES:
+ * - Jahr-Navigation funktioniert jetzt korrekt
+ * - End-Datum wird bei Schulungen angezeigt
+ * 
  * NEUES LAYOUT:
  * - Links: ALLE Stammdaten (volle Höhe)
  * - Rechts oben: Statistik horizontal (KPI-Karten nebeneinander)
@@ -379,6 +383,7 @@ class DetailDialog extends DialogBase {
     this._initActionListeners(modalElement, mitarbeiterId, modal, jahr);
     this._initFilterUndSortierung(modalElement, alleEintraegeSortiert);
     this._initClickHandlers(modalElement, mitarbeiterId, modal, jahr);
+    this._initJahrNavigation(modalElement, mitarbeiterId, modal); // NEU: Jahr-Navigation
 
     // Lade und zeige Arbeitszeitmodell
     await this._ladeUndZeigeArbeitszeitmodell(mitarbeiterId);
@@ -392,6 +397,36 @@ class DetailDialog extends DialogBase {
         resolve();
       }, { once: true });
     });
+  }
+
+  /**
+   * NEU: Initialisiert Jahr-Navigation Buttons
+   */
+  _initJahrNavigation(modalElement, mitarbeiterId, modal) {
+    const btnVoriges = modalElement.querySelector('#btnVorigesJahr');
+    const btnNaechstes = modalElement.querySelector('#btnNaechstesJahr');
+
+    if (btnVoriges) {
+      btnVoriges.addEventListener('click', async () => {
+        const aktuellesJahr = this.dataManager.aktuellesJahr;
+        modal.hide();
+        // Kurze Verzögerung damit Modal richtig geschlossen wird
+        setTimeout(() => {
+          this.zeigeDetails(mitarbeiterId, aktuellesJahr - 1);
+        }, 300);
+      });
+    }
+
+    if (btnNaechstes) {
+      btnNaechstes.addEventListener('click', async () => {
+        const aktuellesJahr = this.dataManager.aktuellesJahr;
+        modal.hide();
+        // Kurze Verzögerung damit Modal richtig geschlossen wird
+        setTimeout(() => {
+          this.zeigeDetails(mitarbeiterId, aktuellesJahr + 1);
+        }, 300);
+      });
+    }
   }
 
   /**
@@ -575,6 +610,7 @@ class DetailDialog extends DialogBase {
 
   /**
    * Rendert einen einzelnen Eintrag
+   * FIX: End-Datum bei Schulungen wird jetzt angezeigt
    */
   _renderEintrag(eintrag) {
     const config = this._getEintragConfig(eintrag.typ);
@@ -592,7 +628,18 @@ class DetailDialog extends DialogBase {
         nebenInfo = `<strong>${eintrag.tage.toFixed(1)}</strong> Tage`;
         break;
       case 'schulung':
-        hauptInfo = formatDatumAnzeige(eintrag.datum);
+        // FIX: End-Datum berechnen und anzeigen
+        const startDatum = new Date(eintrag.datum);
+        const endDatum = new Date(startDatum);
+        endDatum.setDate(endDatum.getDate() + Math.floor(eintrag.dauer_tage) - 1);
+        const endDatumStr = endDatum.toISOString().split('T')[0];
+        
+        // Wenn Start = Ende, nur ein Datum anzeigen
+        if (eintrag.datum === endDatumStr) {
+          hauptInfo = formatDatumAnzeige(eintrag.datum);
+        } else {
+          hauptInfo = `${formatDatumAnzeige(eintrag.datum)} - ${formatDatumAnzeige(endDatumStr)}`;
+        }
         nebenInfo = `<strong>${eintrag.dauer_tage.toFixed(1)}</strong> Tage`;
         break;
       case 'ueberstunden':
