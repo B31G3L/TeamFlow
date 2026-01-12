@@ -45,7 +45,7 @@ class UeberstundenDialog extends DialogBase {
                   <div class="mt-2">
                     <small class="text-muted d-block mb-1">Aufbauen (+):</small>
                     <div class="d-flex gap-2 flex-wrap">
-                <button type="button" class="btn btn-sm btn-outline-success stunden-btn" data-stunden="4">+4</button>
+                      <button type="button" class="btn btn-sm btn-outline-success stunden-btn" data-stunden="4">+4</button>
                       <button type="button" class="btn btn-sm btn-outline-success stunden-btn" data-stunden="8">+8</button>
                     </div>
                   </div>
@@ -53,12 +53,8 @@ class UeberstundenDialog extends DialogBase {
                   <div class="mt-2">
                     <small class="text-muted d-block mb-1">Abbauen (-):</small>
                     <div class="d-flex gap-2 flex-wrap">
-                      <button type="button" class="btn btn-sm btn-outline-danger stunden-btn" data-stunden="-0.25">-0,25</button>
-                      <button type="button" class="btn btn-sm btn-outline-danger stunden-btn" data-stunden="-0.5">-0,5</button>
-                      <button type="button" class="btn btn-sm btn-outline-danger stunden-btn" data-stunden="-0.75">-0,75</button>
-                      <button type="button" class="btn btn-sm btn-outline-danger stunden-btn" data-stunden="-1">-1</button>
-                      <button type="button" class="btn btn-sm btn-outline-danger stunden-btn" data-stunden="-1.5">-1,5</button>
-                      <button type="button" class="btn btn-sm btn-outline-danger stunden-btn" data-stunden="-2">-2</button>
+                      <button type="button" class="btn btn-sm btn-outline-danger stunden-btn" data-stunden="-4">- 4</button>
+                      <button type="button" class="btn btn-sm btn-outline-danger stunden-btn" data-stunden="-8">- 8</button>
                     </div>
                   </div>
                 </div>
