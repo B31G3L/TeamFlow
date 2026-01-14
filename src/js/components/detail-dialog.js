@@ -6,6 +6,7 @@
  * FIXES:
  * - Jahr-Navigation funktioniert jetzt korrekt
  * - End-Datum wird bei Schulungen angezeigt
+ * - Nach Bearbeitung kehrt man zur Detailansicht zurück
  * 
  * NEUES LAYOUT:
  * - Links: ALLE Stammdaten (volle Höhe)
@@ -389,7 +390,7 @@ class DetailDialog extends DialogBase {
     this._initActionListeners(modalElement, mitarbeiterId, modal, jahr);
     this._initFilterUndSortierung(modalElement, alleEintraegeSortiert);
     this._initClickHandlers(modalElement, mitarbeiterId, modal, jahr);
-    this._initJahrNavigation(modalElement, mitarbeiterId, modal, jahr); // NEU: Jahr-Navigation mit korrektem Jahr
+    this._initJahrNavigation(modalElement, mitarbeiterId, modal, jahr);
 
     // Lade und zeige Arbeitszeitmodell
     await this._ladeUndZeigeArbeitszeitmodell(mitarbeiterId);
@@ -416,7 +417,6 @@ class DetailDialog extends DialogBase {
     if (btnVoriges) {
       btnVoriges.addEventListener('click', async () => {
         modal.hide();
-        // Kurze Verzögerung damit Modal richtig geschlossen wird
         setTimeout(() => {
           this.zeigeDetails(mitarbeiterId, anzeigeJahr - 1);
         }, 300);
@@ -426,7 +426,6 @@ class DetailDialog extends DialogBase {
     if (btnNaechstes) {
       btnNaechstes.addEventListener('click', async () => {
         modal.hide();
-        // Kurze Verzögerung damit Modal richtig geschlossen wird
         setTimeout(() => {
           this.zeigeDetails(mitarbeiterId, anzeigeJahr + 1);
         }, 300);
@@ -436,6 +435,7 @@ class DetailDialog extends DialogBase {
 
   /**
    * Initialisiert Click-Handler für KPI-Karten und Buttons
+   * FIX: Kehrt nach Aktion zur Detailansicht zurück
    */
   _initClickHandlers(modalElement, mitarbeiterId, modal, jahr) {
     // Urlaub eintragen
@@ -445,6 +445,7 @@ class DetailDialog extends DialogBase {
         modal.hide();
         if (typeof dialogManager !== 'undefined') {
           await dialogManager.zeigeUrlaubDialog(mitarbeiterId, async () => {
+            // Nach Speichern: Detailansicht wieder öffnen
             setTimeout(() => this.zeigeDetails(mitarbeiterId, jahr), 300);
           });
         }
@@ -458,6 +459,7 @@ class DetailDialog extends DialogBase {
         modal.hide();
         if (typeof dialogManager !== 'undefined') {
           await dialogManager.zeigeUebertragAnpassen(mitarbeiterId, async () => {
+            // Nach Speichern: Detailansicht wieder öffnen
             setTimeout(() => this.zeigeDetails(mitarbeiterId, jahr), 300);
           });
         }
@@ -471,6 +473,7 @@ class DetailDialog extends DialogBase {
         modal.hide();
         if (typeof dialogManager !== 'undefined') {
           await dialogManager.zeigeKrankDialog(mitarbeiterId, async () => {
+            // Nach Speichern: Detailansicht wieder öffnen
             setTimeout(() => this.zeigeDetails(mitarbeiterId, jahr), 300);
           });
         }
@@ -484,6 +487,7 @@ class DetailDialog extends DialogBase {
         modal.hide();
         if (typeof dialogManager !== 'undefined') {
           await dialogManager.zeigeSchulungDialog(mitarbeiterId, async () => {
+            // Nach Speichern: Detailansicht wieder öffnen
             setTimeout(() => this.zeigeDetails(mitarbeiterId, jahr), 300);
           });
         }
@@ -497,6 +501,7 @@ class DetailDialog extends DialogBase {
         modal.hide();
         if (typeof dialogManager !== 'undefined') {
           await dialogManager.zeigeUeberstundenDialog(mitarbeiterId, async () => {
+            // Nach Speichern: Detailansicht wieder öffnen
             setTimeout(() => this.zeigeDetails(mitarbeiterId, jahr), 300);
           });
         }
@@ -510,6 +515,7 @@ class DetailDialog extends DialogBase {
         modal.hide();
         if (typeof dialogManager !== 'undefined') {
           await dialogManager.zeigeStammdatenBearbeiten(mitarbeiterId, async () => {
+            // Nach Speichern: Detailansicht wieder öffnen
             setTimeout(() => this.zeigeDetails(mitarbeiterId, jahr), 300);
           });
         }
@@ -523,6 +529,7 @@ class DetailDialog extends DialogBase {
         modal.hide();
         if (typeof dialogManager !== 'undefined') {
           await dialogManager.zeigeArbeitszeitmodell(mitarbeiterId, async () => {
+            // Nach Speichern: Detailansicht wieder öffnen
             setTimeout(() => this.zeigeDetails(mitarbeiterId, jahr), 300);
           });
         }
@@ -695,6 +702,7 @@ class DetailDialog extends DialogBase {
 
   /**
    * Initialisiert Event-Listener für Aktionen
+   * FIX: Kehrt nach Bearbeitung/Löschen zur Detailansicht zurück
    */
   _initActionListeners(modalElement, mitarbeiterId, modal, jahr) {
     modalElement.addEventListener('click', async (e) => {
@@ -731,6 +739,8 @@ class DetailDialog extends DialogBase {
 
       showNotification('Erfolg', 'Eintrag wurde gelöscht', 'success');
       this.dataManager.invalidateCache();
+      
+      // FIX: Kehre zur Detailansicht zurück
       modal.hide();
       setTimeout(() => this.zeigeDetails(mitarbeiterId, jahr), 300);
     } catch (error) {
@@ -739,7 +749,7 @@ class DetailDialog extends DialogBase {
     }
   }
 
-async _handleEdit(editBtn, mitarbeiterId, modal, jahr) {
+  async _handleEdit(editBtn, mitarbeiterId, modal, jahr) {
     const id = parseInt(editBtn.dataset.id);
     const typ = editBtn.dataset.typ;
     const von = editBtn.dataset.von;
@@ -750,6 +760,7 @@ async _handleEdit(editBtn, mitarbeiterId, modal, jahr) {
 
     try {
       // Je nach Typ den entsprechenden Bearbeitungs-Dialog aufrufen
+      // FIX: Callback öffnet Detailansicht wieder
       if (typ === 'urlaub') {
         await this._bearbeiteUrlaub(id, mitarbeiterId, von, bis, async () => {
           setTimeout(() => this.zeigeDetails(mitarbeiterId, jahr), 300);
@@ -770,7 +781,7 @@ async _handleEdit(editBtn, mitarbeiterId, modal, jahr) {
     } catch (error) {
       console.error('Fehler beim Bearbeiten:', error);
       showNotification('Fehler', error.message, 'danger');
-      // Modal wieder anzeigen bei Fehler
+      // Bei Fehler auch zur Detailansicht zurück
       setTimeout(() => this.zeigeDetails(mitarbeiterId, jahr), 300);
     }
   }
@@ -779,7 +790,6 @@ async _handleEdit(editBtn, mitarbeiterId, modal, jahr) {
    * Bearbeitet einen Urlaubseintrag
    */
   async _bearbeiteUrlaub(id, mitarbeiterId, vonDatum, bisDatum, callback) {
-    // Lade den Eintrag
     const result = await this.dataManager.db.get('SELECT * FROM urlaub WHERE id = ?', [id]);
     if (!result.success || !result.data) {
       throw new Error('Urlaubseintrag nicht gefunden');
@@ -1221,8 +1231,6 @@ async _handleEdit(editBtn, mitarbeiterId, modal, jahr) {
     };
   }
 
- 
-
   _kombiniereUndSortiereEintraege(eintraege) {
     const alle = [];
 
@@ -1274,7 +1282,6 @@ async _handleEdit(editBtn, mitarbeiterId, modal, jahr) {
     if (!container) return;
 
     try {
-      // Lade Arbeitszeitmodell aus Datenbank
       const modell = await this.dataManager.getArbeitszeitmodell(mitarbeiterId);
       
       const wochentage = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
@@ -1288,11 +1295,9 @@ async _handleEdit(editBtn, mitarbeiterId, modal, jahr) {
       html += '<div class="text-light small" style="line-height: 1.6;">';
 
       if (modell.length === 0) {
-        // Standard-Modell: Mo-Fr ganz, Sa-So frei
         html += 'Mo-Fr: <span class="text-success">ganz</span><br>';
         html += 'Sa-So: <span class="text-muted">frei</span>';
       } else {
-        // Gruppiere aufeinanderfolgende Tage mit gleicher Arbeitszeit
         const gruppen = [];
         let aktuelleGruppe = null;
 
@@ -1301,7 +1306,6 @@ async _handleEdit(editBtn, mitarbeiterId, modal, jahr) {
           const arbeitszeit = tagModell ? tagModell.arbeitszeit : (i < 5 ? 'VOLL' : 'FREI');
 
           if (!aktuelleGruppe || aktuelleGruppe.arbeitszeit !== arbeitszeit) {
-            // Neue Gruppe starten
             if (aktuelleGruppe) {
               gruppen.push(aktuelleGruppe);
             }
@@ -1311,17 +1315,14 @@ async _handleEdit(editBtn, mitarbeiterId, modal, jahr) {
               arbeitszeit: arbeitszeit
             };
           } else {
-            // Gruppe erweitern
             aktuelleGruppe.end = i;
           }
         }
         
-        // Letzte Gruppe hinzufügen
         if (aktuelleGruppe) {
           gruppen.push(aktuelleGruppe);
         }
 
-        // Gruppen rendern
         gruppen.forEach((gruppe, index) => {
           const label = labels[gruppe.arbeitszeit] || gruppe.arbeitszeit.toLowerCase();
           const colorClass = gruppe.arbeitszeit === 'VOLL' ? 'text-success' : 
@@ -1329,10 +1330,8 @@ async _handleEdit(editBtn, mitarbeiterId, modal, jahr) {
                             'text-muted';
           
           if (gruppe.start === gruppe.end) {
-            // Einzelner Tag
             html += `${wochentage[gruppe.start]}: <span class="${colorClass}">${label}</span>`;
           } else {
-            // Mehrere Tage
             html += `${wochentage[gruppe.start]}-${wochentage[gruppe.end]}: <span class="${colorClass}">${label}</span>`;
           }
           
