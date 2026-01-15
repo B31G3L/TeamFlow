@@ -3,6 +3,8 @@
  * Orchestriert die gesamte App
  * 
  * NEU: Zweistufige Navigation - Stammdaten & Urlaubsplaner
+ * UPDATE: Excel und PDF Export statt CSV
+ * UPDATE: Tabellen-Button in Subnavigation
  */
 
 // Globale Variablen
@@ -61,6 +63,16 @@ const SUBNAV_CONFIG = {
   
   urlaubsplaner: [
     {
+      id: 'subTabelle',
+      icon: 'bi-table',
+      text: 'Tabelle',
+      action: async () => {
+        if (aktuelleAnsicht !== 'tabelle') {
+          await toggleAnsicht();
+        }
+      }
+    },
+    {
       id: 'subKalender',
       icon: 'bi-calendar3',
       text: 'Kalender',
@@ -70,6 +82,7 @@ const SUBNAV_CONFIG = {
         }
       }
     },
+    { separator: true }, // Separator nach Ansichten
     {
       id: 'subFeiertage',
       icon: 'bi-calendar-event',
@@ -82,11 +95,18 @@ const SUBNAV_CONFIG = {
       text: 'Veranstaltungen',
       action: () => dialogManager.zeigeVeranstaltungVerwalten(async () => await loadData())
     },
+    { separator: true }, // Separator nach Verwaltung
     {
-      id: 'subExportCSV',
-      icon: 'bi-file-earmark-spreadsheet',
-      text: 'CSV Export',
-      action: () => exportToCSV()
+      id: 'subExportExcel',
+      icon: 'bi-file-earmark-excel',
+      text: 'Excel Export',
+      action: () => exportToExcel()
+    },
+    {
+      id: 'subExportPDF',
+      icon: 'bi-file-earmark-pdf',
+      text: 'PDF Export',
+      action: () => exportToPDF()
     }
   ]
 };
@@ -115,7 +135,17 @@ function updateSubnavigation(hauptmenu) {
   subnavContainer.classList.remove('d-none');
   
   // Erstelle Submenü-Items
-  items.forEach(item => {
+  items.forEach((item, index) => {
+    // Separator
+    if (item.separator) {
+      const separator = document.createElement('li');
+      separator.className = 'nav-separator';
+      separator.innerHTML = '<span class="separator-line"></span>';
+      subnavContent.appendChild(separator);
+      return;
+    }
+    
+    // Normales Nav-Item
     const li = document.createElement('li');
     li.className = 'nav-item';
     
@@ -252,9 +282,6 @@ async function toggleAnsicht() {
 
   const tabellenAnsicht = document.getElementById('tabellenAnsicht');
   const kalenderAnsichtDiv = document.getElementById('kalenderAnsicht');
-  const toggleBtn = document.getElementById('btnAnsichtToggle');
-  const toggleIcon = document.getElementById('ansichtToggleIcon');
-  const toggleText = document.getElementById('ansichtToggleText');
 
   if (aktuelleAnsicht === 'tabelle') {
     // Wechsle zu Kalender
@@ -262,11 +289,6 @@ async function toggleAnsicht() {
     
     tabellenAnsicht.classList.add('d-none');
     kalenderAnsichtDiv.classList.remove('d-none');
-    
-    // Button anpassen
-    toggleIcon.className = 'bi bi-table';
-    toggleText.textContent = 'Tabelle';
-    toggleBtn.title = 'Zur Tabellenansicht';
     
     // Kalender-Jahr synchronisieren und anzeigen
     kalenderAnsicht.currentYear = dataManager.aktuellesJahr;
@@ -278,11 +300,6 @@ async function toggleAnsicht() {
     
     kalenderAnsichtDiv.classList.add('d-none');
     tabellenAnsicht.classList.remove('d-none');
-    
-    // Button anpassen
-    toggleIcon.className = 'bi bi-calendar3';
-    toggleText.textContent = 'Kalender';
-    toggleBtn.title = 'Zur Kalenderansicht';
   }
 }
 
@@ -350,40 +367,6 @@ async function initUI() {
     await tabelle.suchen(e.target.value, abteilung);
   });
 
-  // System-Menü
-  document.getElementById('menuLogs').addEventListener('click', async (e) => {
-    e.preventDefault();
-    const logViewer = new LogViewer();
-    await logViewer.zeigen();
-  });
-
-  document.getElementById('menuInfo').addEventListener('click', async (e) => {
-    e.preventDefault();
-    try {
-      const version = await window.electronAPI.getAppVersion();
-      const dbPath = await window.electronAPI.getDatabasePath();
-      const info = await database.getDatabaseInfo();
-      
-      const infoText = `Teamplanner Version: ${version}
-Datenbank: ${dbPath}
-
-Statistik:
-- Mitarbeiter: ${info.tables.mitarbeiter}
-- Abteilungen: ${info.tables.abteilungen}
-- Urlaub: ${info.tables.urlaub}
-- Krankheit: ${info.tables.krankheit}
-- Schulung: ${info.tables.schulung}
-- Überstunden: ${info.tables.ueberstunden}
-- Feiertage: ${info.tables.feiertage}
-- Veranstaltungen: ${info.tables.veranstaltungen}`;
-      
-      alert(infoText);
-    } catch (error) {
-      console.error('Fehler beim Laden der App-Info:', error);
-      showNotification('Fehler', 'App-Info konnte nicht geladen werden', 'danger');
-    }
-  });
-
   // Toolbar-Buttons
   document.getElementById('btnAktualisieren').addEventListener('click', async (e) => {
     e.preventDefault();
@@ -398,12 +381,6 @@ Statistik:
     }
     
     showNotification('Aktualisiert', 'Daten wurden neu geladen', 'success');
-  });
-
-  // Ansicht-Toggle Button in Toolbar
-  document.getElementById('btnAnsichtToggle').addEventListener('click', async (e) => {
-    e.preventDefault();
-    await toggleAnsicht();
   });
 
   // Event Delegation für klickbare Tabellenzellen
@@ -511,9 +488,9 @@ async function loadData() {
 }
 
 /**
- * Exportiert Daten als CSV
+ * Exportiert Daten als Excel
  */
-async function exportToCSV() {
+async function exportToExcel() {
   try {
     const stats = await dataManager.getAlleStatistiken();
 
@@ -522,51 +499,38 @@ async function exportToCSV() {
       return;
     }
 
-    const BOM = '\uFEFF';
-    let csv = BOM + 'Vorname;Nachname;Abteilung;Anspruch;Übertrag;Verfügbar;Genommen;Rest;Krank;Schulung;Überstunden\n';
-
-    const escapeField = (field) => {
-      if (field && field.toString().includes(';')) {
-        return `"${field}"`;
-      }
-      return field;
-    };
-
-    stats.forEach(stat => {
-      const ma = stat.mitarbeiter;
-      csv += `${escapeField(ma.vorname)};${escapeField(ma.nachname)};${escapeField(ma.abteilung_name)};`;
-      csv += `${ma.urlaubstage_jahr};${stat.uebertrag_vorjahr.toFixed(1)};${stat.urlaub_verfuegbar.toFixed(1)};`;
-      csv += `${stat.urlaub_genommen.toFixed(1)};${stat.urlaub_rest.toFixed(1)};${stat.krankheitstage.toFixed(1)};`;
-      csv += `${stat.schulungstage.toFixed(1)};${stat.ueberstunden.toFixed(1)}\n`;
-    });
-
-    if (window.electronAPI) {
-      const result = await window.electronAPI.showSaveDialog({
-        title: 'CSV Exportieren',
-        defaultPath: `teamplanner_export_${dataManager.aktuellesJahr}.csv`,
-        filters: [
-          { name: 'CSV Dateien', extensions: ['csv'] },
-          { name: 'Alle Dateien', extensions: ['*'] }
-        ]
-      });
-
-      if (!result.canceled && result.filePath) {
-        await window.electronAPI.writeFile(result.filePath, csv);
-        showNotification('Export erfolgreich', `Daten wurden exportiert`, 'success');
-      }
-    } else {
-      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-      const link = document.createElement('a');
-      const url = URL.createObjectURL(blob);
-      link.href = url;
-      link.download = `teamplanner_export_${dataManager.aktuellesJahr}.csv`;
-      link.click();
-      setTimeout(() => URL.revokeObjectURL(url), 100);
-      showNotification('Export erfolgreich', 'CSV wurde heruntergeladen', 'success');
-    }
+    // TODO: Excel-Export implementieren
+    // Hier wird später die openpyxl-basierte Python-Funktion aufgerufen
+    
+    showNotification('Info', 'Excel-Export wird implementiert...', 'info');
+    console.log('Excel-Export für', stats.length, 'Mitarbeiter');
 
   } catch (error) {
-    console.error('Fehler beim Export:', error);
+    console.error('Fehler beim Excel-Export:', error);
+    showNotification('Export fehlgeschlagen', error.message, 'danger');
+  }
+}
+
+/**
+ * Exportiert Daten als PDF
+ */
+async function exportToPDF() {
+  try {
+    const stats = await dataManager.getAlleStatistiken();
+
+    if (stats.length === 0) {
+      showNotification('Info', 'Keine Daten zum Exportieren vorhanden', 'warning');
+      return;
+    }
+
+    // TODO: PDF-Export implementieren
+    // Hier wird später die reportlab-basierte Python-Funktion aufgerufen
+    
+    showNotification('Info', 'PDF-Export wird implementiert...', 'info');
+    console.log('PDF-Export für', stats.length, 'Mitarbeiter');
+
+  } catch (error) {
+    console.error('Fehler beim PDF-Export:', error);
     showNotification('Export fehlgeschlagen', error.message, 'danger');
   }
 }

@@ -11,6 +11,8 @@
 
   <!-- Custom CSS -->
   <link href="styles/main.css" rel="stylesheet">
+  <link href="styles/subnavigation-separator.css" rel="stylesheet">
+
 </head>
 <body>
 
@@ -33,22 +35,6 @@
             <a class="nav-link active" href="#" id="navUrlaubsplaner" data-nav="urlaubsplaner">
               <i class="bi bi-calendar-check"></i> Urlaubsplaner
             </a>
-          </li>
-
-          <!-- System Menü rechts -->
-          <li class="nav-item dropdown ms-auto">
-            <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
-              <i class="bi bi-terminal"></i> System
-            </a>
-            <ul class="dropdown-menu dropdown-menu-end">
-              <li><a class="dropdown-item" href="#" id="menuLogs">
-                <i class="bi bi-file-text"></i> System-Logs
-              </a></li>
-              <li><hr class="dropdown-divider"></li>
-              <li><a class="dropdown-item" href="#" id="menuInfo">
-                <i class="bi bi-info-circle"></i> App-Info
-              </a></li>
-            </ul>
           </li>
         </ul>
       </div>
@@ -73,47 +59,42 @@
 
     <!-- Urlaubsplaner-Ansicht (initial sichtbar) -->
     <div class="urlaubsplaner-container" id="urlaubsplanerAnsicht">
-      <!-- Toolbar -->
-      <div class="toolbar">
-        <!-- Suchfeld -->
-        <div class="toolbar-item">
-          <input type="text" id="suchfeld" class="form-control" 
-                 placeholder="🔍 Suche nach Name oder Abteilung...">
-        </div>
+      <!-- Mitarbeiter-Tabelle -->
+      <div class="table-container" id="tabellenAnsicht">
+        <!-- Toolbar (nur in Tabellenansicht) -->
+        <div class="toolbar">
+          <!-- Suchfeld -->
+          <div class="toolbar-item">
+            <input type="text" id="suchfeld" class="form-control" 
+                   placeholder="🔍 Suche nach Name oder Abteilung...">
+          </div>
 
-        <!-- Abteilungs-Filter -->
-        <div class="toolbar-item">
-          <select id="abteilungFilter" class="form-select">
-            <option value="Alle">Alle Abteilungen</option>
-            <!-- Wird dynamisch gefüllt -->
-          </select>
-        </div>
-        
-        <!-- Jahr-Auswahl -->
-        <div class="toolbar-item">
-          <div class="d-flex align-items-center gap-2">
-            <label for="jahrSelect" class="mb-0 fw-bold text-nowrap">Jahr:</label>
-            <select id="jahrSelect" class="form-select" style="width: 120px;">
+          <!-- Abteilungs-Filter -->
+          <div class="toolbar-item">
+            <select id="abteilungFilter" class="form-select">
+              <option value="Alle">Alle Abteilungen</option>
               <!-- Wird dynamisch gefüllt -->
             </select>
           </div>
+          
+          <!-- Jahr-Auswahl -->
+          <div class="toolbar-item">
+            <div class="d-flex align-items-center gap-2">
+              <label for="jahrSelect" class="mb-0 fw-bold text-nowrap">Jahr:</label>
+              <select id="jahrSelect" class="form-select" style="width: 120px;">
+                <!-- Wird dynamisch gefüllt -->
+              </select>
+            </div>
+          </div>
+          
+          <!-- Buttons -->
+          <div class="toolbar-item toolbar-right">
+            <button class="btn btn-outline-secondary" id="btnAktualisieren" title="Aktualisieren">
+              <i class="bi bi-arrow-clockwise"></i>
+            </button>
+          </div>
         </div>
-        
-        <!-- Buttons -->
-        <div class="toolbar-item toolbar-right">
-          <!-- Kalender/Tabelle Toggle Button -->
-          <button class="btn btn-outline-info me-2" id="btnAnsichtToggle" title="Zur Kalenderansicht">
-            <i class="bi bi-calendar3" id="ansichtToggleIcon"></i>
-            <span id="ansichtToggleText">Kalender</span>
-          </button>
-          <button class="btn btn-outline-secondary" id="btnAktualisieren" title="Aktualisieren">
-            <i class="bi bi-arrow-clockwise"></i>
-          </button>
-        </div>
-      </div>
 
-      <!-- Mitarbeiter-Tabelle -->
-      <div class="table-container" id="tabellenAnsicht">
         <table class="table table-hover table-striped mb-0" id="mitarbeiterTabelle">
           <thead class="table-dark sticky-top">
             <tr>
