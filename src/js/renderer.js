@@ -2,7 +2,7 @@
  * Teamplanner - Renderer Process
  * Orchestriert die gesamte App
  * 
- * NEU: Zweistufige Navigation mit Hauptmenü und Submenüs
+ * NEU: Zweistufige Navigation - Stammdaten & Urlaubsplaner
  */
 
 // Globale Variablen
@@ -11,8 +11,9 @@ let dataManager;
 let tabelle;
 let dialogManager;
 let kalenderAnsicht;
+let stammdatenAnsicht;
 let aktuelleAnsicht = 'tabelle'; // 'tabelle' oder 'kalender'
-let aktuellesHauptmenu = 'urlaubsplaner'; // 'stammdaten', 'urlaubsplaner', 'einstellungen'
+let aktuellesHauptmenu = 'urlaubsplaner'; // 'stammdaten' oder 'urlaubsplaner'
 
 /**
  * Subnavigation-Konfiguration
@@ -20,16 +21,41 @@ let aktuellesHauptmenu = 'urlaubsplaner'; // 'stammdaten', 'urlaubsplaner', 'ein
 const SUBNAV_CONFIG = {
   stammdaten: [
     {
-      id: 'subMitarbeiterHinzufuegen',
+      id: 'subMitarbeiterAnlegen',
       icon: 'bi-plus-circle',
       text: 'Mitarbeiter anlegen',
-      action: () => dialogManager.zeigeStammdatenHinzufuegen(async () => await loadData())
+      action: () => dialogManager.zeigeStammdatenHinzufuegen(async () => {
+        if (aktuellesHauptmenu === 'stammdaten') {
+          await stammdatenAnsicht.zeigen();
+        } else {
+          await loadData();
+        }
+      })
     },
     {
       id: 'subMitarbeiterVerwalten',
       icon: 'bi-people',
       text: 'Mitarbeiter verwalten',
-      action: () => dialogManager.zeigeStammdatenVerwalten(async () => await loadData())
+      action: () => dialogManager.zeigeStammdatenVerwalten(async () => {
+        if (aktuellesHauptmenu === 'stammdaten') {
+          await stammdatenAnsicht.zeigen();
+        } else {
+          await loadData();
+        }
+      })
+    },
+    {
+      id: 'subAbteilungen',
+      icon: 'bi-building',
+      text: 'Abteilungen',
+      action: () => dialogManager.zeigeAbteilungenVerwalten(async () => {
+        if (aktuellesHauptmenu === 'stammdaten') {
+          await stammdatenAnsicht.zeigen();
+        } else {
+          await loadData();
+          await updateAbteilungFilter();
+        }
+      })
     }
   ],
   
@@ -45,30 +71,6 @@ const SUBNAV_CONFIG = {
       }
     },
     {
-      id: 'subExportCSV',
-      icon: 'bi-file-earmark-spreadsheet',
-      text: 'CSV Export',
-      action: () => exportToCSV()
-    },
-    {
-      id: 'subExportExcel',
-      icon: 'bi-file-earmark-excel',
-      text: 'Excel Export',
-      action: () => showNotification('Info', 'Excel-Export ist noch nicht implementiert', 'info')
-    }
-  ],
-  
-  einstellungen: [
-    {
-      id: 'subAbteilungen',
-      icon: 'bi-building',
-      text: 'Abteilungen',
-      action: () => dialogManager.zeigeAbteilungenVerwalten(async () => {
-        await loadData();
-        await updateAbteilungFilter();
-      })
-    },
-    {
       id: 'subFeiertage',
       icon: 'bi-calendar-event',
       text: 'Feiertage',
@@ -79,6 +81,12 @@ const SUBNAV_CONFIG = {
       icon: 'bi-calendar-check',
       text: 'Veranstaltungen',
       action: () => dialogManager.zeigeVeranstaltungVerwalten(async () => await loadData())
+    },
+    {
+      id: 'subExportCSV',
+      icon: 'bi-file-earmark-spreadsheet',
+      text: 'CSV Export',
+      action: () => exportToCSV()
     }
   ]
 };
@@ -99,7 +107,6 @@ function updateSubnavigation(hauptmenu) {
   const items = SUBNAV_CONFIG[hauptmenu] || [];
   
   if (items.length === 0) {
-    // Keine Subitems - verstecke Subnavigation
     subnavContainer.classList.add('d-none');
     return;
   }
@@ -129,7 +136,7 @@ function updateSubnavigation(hauptmenu) {
 }
 
 /**
- * Setzt das aktive Hauptmenü
+ * Setzt das aktive Hauptmenü und wechselt die Ansicht
  */
 function setAktivesHauptmenu(menu) {
   // Entferne 'active' von allen Hauptmenü-Items
@@ -148,6 +155,38 @@ function setAktivesHauptmenu(menu) {
   
   // Aktualisiere Subnavigation
   updateSubnavigation(menu);
+  
+  // Wechsle Hauptansicht
+  wechsleHauptansicht(menu);
+}
+
+/**
+ * Wechselt zwischen Stammdaten und Urlaubsplaner-Ansicht
+ */
+async function wechsleHauptansicht(menu) {
+  const stammdatenContainer = document.getElementById('stammdatenAnsicht');
+  const urlaubsplanerContainer = document.getElementById('urlaubsplanerAnsicht');
+
+  if (menu === 'stammdaten') {
+    // Zeige Stammdaten-Ansicht
+    urlaubsplanerContainer.classList.add('d-none');
+    stammdatenContainer.classList.remove('d-none');
+    
+    // Lade Stammdaten
+    await stammdatenAnsicht.zeigen();
+    
+  } else {
+    // Zeige Urlaubsplaner-Ansicht
+    stammdatenContainer.classList.add('d-none');
+    urlaubsplanerContainer.classList.remove('d-none');
+    
+    // Lade Urlaubsplaner-Daten (falls noch nicht geladen)
+    if (aktuelleAnsicht === 'tabelle') {
+      await loadData();
+    } else {
+      await kalenderAnsicht.zeigen();
+    }
+  }
 }
 
 /**
@@ -177,10 +216,14 @@ async function initApp() {
     kalenderAnsicht = new KalenderAnsicht(dataManager);
     console.log('✅ Kalender-Ansicht initialisiert');
 
+    // Stammdaten-Ansicht initialisieren
+    stammdatenAnsicht = new StammdatenAnsicht(dataManager, dialogManager);
+    console.log('✅ Stammdaten-Ansicht initialisiert');
+
     // UI initialisieren
     await initUI();
 
-    // Initiale Daten laden
+    // Initiale Daten laden (Urlaubsplaner ist initial aktiv)
     await loadData();
 
     console.log('✅ Teamplanner erfolgreich gestartet');
@@ -202,9 +245,11 @@ async function initApp() {
 }
 
 /**
- * Wechselt zwischen Tabellen- und Kalenderansicht
+ * Wechselt zwischen Tabellen- und Kalenderansicht (nur im Urlaubsplaner)
  */
 async function toggleAnsicht() {
+  if (aktuellesHauptmenu !== 'urlaubsplaner') return;
+
   const tabellenAnsicht = document.getElementById('tabellenAnsicht');
   const kalenderAnsichtDiv = document.getElementById('kalenderAnsicht');
   const toggleBtn = document.getElementById('btnAnsichtToggle');
@@ -274,12 +319,15 @@ async function initUI() {
   jahrSelect.addEventListener('change', async (e) => {
     dataManager.aktuellesJahr = parseInt(e.target.value);
     dataManager.invalidateCache();
-    await loadData();
     
-    // Wenn Kalender aktiv ist, auch dort aktualisieren
-    if (aktuelleAnsicht === 'kalender') {
-      kalenderAnsicht.currentYear = dataManager.aktuellesJahr;
-      await kalenderAnsicht.zeigen();
+    if (aktuellesHauptmenu === 'stammdaten') {
+      await stammdatenAnsicht.zeigen();
+    } else {
+      await loadData();
+      if (aktuelleAnsicht === 'kalender') {
+        kalenderAnsicht.currentYear = dataManager.aktuellesJahr;
+        await kalenderAnsicht.zeigen();
+      }
     }
     
     showNotification('Jahr gewechselt', `Aktuelles Jahr: ${dataManager.aktuellesJahr}`, 'info');
@@ -339,11 +387,14 @@ Statistik:
   // Toolbar-Buttons
   document.getElementById('btnAktualisieren').addEventListener('click', async (e) => {
     e.preventDefault();
-    await loadData();
     
-    // Wenn Kalender aktiv ist, auch dort aktualisieren
-    if (aktuelleAnsicht === 'kalender') {
-      await kalenderAnsicht.zeigen();
+    if (aktuellesHauptmenu === 'stammdaten') {
+      await stammdatenAnsicht.zeigen();
+    } else {
+      await loadData();
+      if (aktuelleAnsicht === 'kalender') {
+        await kalenderAnsicht.zeigen();
+      }
     }
     
     showNotification('Aktualisiert', 'Daten wurden neu geladen', 'success');

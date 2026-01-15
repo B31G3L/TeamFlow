@@ -35,12 +35,6 @@
             </a>
           </li>
 
-          <li class="nav-item">
-            <a class="nav-link" href="#" id="navEinstellungen" data-nav="einstellungen">
-              <i class="bi bi-gear"></i> Einstellungen
-            </a>
-          </li>
-
           <!-- System Menü rechts -->
           <li class="nav-item dropdown ms-auto">
             <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
@@ -72,66 +66,76 @@
 
   <!-- Main Content -->
   <main class="main-content">
-    <!-- Toolbar -->
-    <div class="toolbar">
-      <!-- Suchfeld -->
-      <div class="toolbar-item">
-        <input type="text" id="suchfeld" class="form-control" 
-               placeholder="🔍 Suche nach Name oder Abteilung...">
-      </div>
+    <!-- Stammdaten-Ansicht (initial versteckt) -->
+    <div class="stammdaten-container d-none" id="stammdatenAnsicht">
+      <!-- Wird dynamisch gefüllt -->
+    </div>
 
-      <!-- Abteilungs-Filter -->
-      <div class="toolbar-item">
-        <select id="abteilungFilter" class="form-select">
-          <option value="Alle">Alle Abteilungen</option>
-          <!-- Wird dynamisch gefüllt -->
-        </select>
-      </div>
-<!-- Jahr-Auswahl -->
-        <div class="col-md-6">
-          <div class="d-flex justify-content-end align-items-center gap-3">
-            <label for="jahrSelect" class="mb-0 fw-bold">Jahr:</label>
-            <select id="jahrSelect" class="form-select form-select-sm" style="width: 120px;">
+    <!-- Urlaubsplaner-Ansicht (initial sichtbar) -->
+    <div class="urlaubsplaner-container" id="urlaubsplanerAnsicht">
+      <!-- Toolbar -->
+      <div class="toolbar">
+        <!-- Suchfeld -->
+        <div class="toolbar-item">
+          <input type="text" id="suchfeld" class="form-control" 
+                 placeholder="🔍 Suche nach Name oder Abteilung...">
+        </div>
+
+        <!-- Abteilungs-Filter -->
+        <div class="toolbar-item">
+          <select id="abteilungFilter" class="form-select">
+            <option value="Alle">Alle Abteilungen</option>
+            <!-- Wird dynamisch gefüllt -->
+          </select>
+        </div>
+        
+        <!-- Jahr-Auswahl -->
+        <div class="toolbar-item">
+          <div class="d-flex align-items-center gap-2">
+            <label for="jahrSelect" class="mb-0 fw-bold text-nowrap">Jahr:</label>
+            <select id="jahrSelect" class="form-select" style="width: 120px;">
               <!-- Wird dynamisch gefüllt -->
             </select>
           </div>
         </div>
-      <!-- Buttons -->
-      <div class="toolbar-item toolbar-right">
-        <!-- Kalender/Tabelle Toggle Button -->
-        <button class="btn btn-outline-info me-2" id="btnAnsichtToggle" title="Zur Kalenderansicht">
-          <i class="bi bi-calendar3" id="ansichtToggleIcon"></i>
-          <span id="ansichtToggleText">Kalender</span>
-        </button>
-        <button class="btn btn-outline-secondary" id="btnAktualisieren" title="Aktualisieren">
-          <i class="bi bi-arrow-clockwise"></i>
-        </button>
+        
+        <!-- Buttons -->
+        <div class="toolbar-item toolbar-right">
+          <!-- Kalender/Tabelle Toggle Button -->
+          <button class="btn btn-outline-info me-2" id="btnAnsichtToggle" title="Zur Kalenderansicht">
+            <i class="bi bi-calendar3" id="ansichtToggleIcon"></i>
+            <span id="ansichtToggleText">Kalender</span>
+          </button>
+          <button class="btn btn-outline-secondary" id="btnAktualisieren" title="Aktualisieren">
+            <i class="bi bi-arrow-clockwise"></i>
+          </button>
+        </div>
       </div>
-    </div>
 
-    <!-- Mitarbeiter-Tabelle -->
-    <div class="table-container" id="tabellenAnsicht">
-      <table class="table table-hover table-striped mb-0" id="mitarbeiterTabelle">
-        <thead class="table-dark sticky-top">
-          <tr>
-            <th>Name</th>
-            <th>Genommen</th>
-            <th>Rest</th>
-            <th>Überstunden</th>
-            <th>Krank</th>
-            <th>Schulung</th>
-            <th>Aktionen</th>
-          </tr>
-        </thead>
-        <tbody id="mitarbeiterTabelleBody">
-          <!-- Wird dynamisch gefüllt -->
-        </tbody>
-      </table>
-    </div>
+      <!-- Mitarbeiter-Tabelle -->
+      <div class="table-container" id="tabellenAnsicht">
+        <table class="table table-hover table-striped mb-0" id="mitarbeiterTabelle">
+          <thead class="table-dark sticky-top">
+            <tr>
+              <th>Name</th>
+              <th>Genommen</th>
+              <th>Rest</th>
+              <th>Überstunden</th>
+              <th>Krank</th>
+              <th>Schulung</th>
+              <th>Aktionen</th>
+            </tr>
+          </thead>
+          <tbody id="mitarbeiterTabelleBody">
+            <!-- Wird dynamisch gefüllt -->
+          </tbody>
+        </table>
+      </div>
 
-    <!-- Kalender-Ansicht (inline, initial versteckt) -->
-    <div class="kalender-inline-container d-none" id="kalenderAnsicht">
-      <!-- Wird dynamisch gefüllt -->
+      <!-- Kalender-Ansicht (inline, initial versteckt) -->
+      <div class="kalender-inline-container d-none" id="kalenderAnsicht">
+        <!-- Wird dynamisch gefüllt -->
+      </div>
     </div>
   </main>
 
@@ -165,12 +169,13 @@
   <script src="js/components/krankheit-dialog.js"></script>
   <script src="js/components/schulung-dialog.js"></script>
   <script src="js/components/ueberstunden-dialog.js"></script>
-  <script src="js/components/uebertrag-dialog.js"></script>
+  <parameter name="uebertrag-dialog.js"></script>
   <script src="js/components/arbeitszeitmodell-dialog.js"></script>
   <script src="js/components/feiertag-dialog.js"></script>
   <script src="js/components/veranstaltung-dialog.js"></script>
   <script src="js/components/detail-dialog.js"></script>
   <script src="js/components/kalender-ansicht.js"></script>
+  <script src="js/components/stammdaten-ansicht.js"></script>
   <script src="js/components/log-viewer.js"></script>
   <script src="js/components/dialog-manager.js"></script>
   

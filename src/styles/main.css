@@ -11,10 +11,6 @@
   --info-color: #17a2b8;
   --dark-bg: #1a1a1a;
   --card-bg: #2d2d2d;
-  --header-height: 76px;
-  --navbar-height: 56px;
-  --subnav-height: 48px;
-  --toolbar-height: 60px;
 }
 
 /* Allgemeine Styles */
@@ -33,27 +29,17 @@ body {
   flex-direction: column;
 }
 
-/* Header */
-header.bg-primary {
-  background-color: var(--primary-color) !important;
-  flex-shrink: 0;
-}
-
 /* Hauptnavbar */
 .navbar-dark {
   background-color: #2d2d2d !important;
   flex-shrink: 0;
-  position: relative;
-  z-index: 1030;
 }
 
 /* Subnavigation */
 .subnav {
   background-color: #3d3d3d !important;
-  min-height: var(--subnav-height);
+  min-height: 48px;
   flex-shrink: 0;
-  position: relative;
-  z-index: 1025;
   transition: all 0.3s ease;
 }
 
@@ -76,17 +62,17 @@ header.bg-primary {
   color: #fff;
 }
 
-.subnav .nav-link i {
-  margin-right: 0.5rem;
-}
-
-/* Dropdown-Menüs über der Tabelle */
-.dropdown-menu {
-  z-index: 1050;
-}
-
-/* Main Content - Füllt den restlichen Platz */
+/* Main Content */
 .main-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
+}
+
+/* URL AUBSPLANER Container */
+.urlaubsplaner-container {
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -105,30 +91,18 @@ header.bg-primary {
   flex-shrink: 0;
 }
 
-.toolbar-item {
-  flex-shrink: 0;
-}
-
-.toolbar-item:first-child {
-  width: 300px;
-}
-
-.toolbar-item:nth-child(2) {
-  width: 200px;
-}
-
 .toolbar-right {
   margin-left: auto;
 }
 
-/* Tabellen-Container - Füllt den Rest */
+/* Tabellen-Container */
 .table-container {
   flex: 1;
   overflow: auto;
   min-height: 0;
 }
 
-/* Kalender Inline Container - Füllt den Rest wie Tabelle */
+/* Kalender Inline Container */
 .kalender-inline-container {
   flex: 1;
   display: flex;
@@ -137,40 +111,190 @@ header.bg-primary {
   min-height: 0;
 }
 
-/* Tabelle - NOCH KOMPAKTER */
+/* ===========================
+   STAMMDATEN-ANSICHT STYLES
+   =========================== */
+
+.stammdaten-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.stammdaten-header {
+  background-color: #2d2d2d;
+  border-bottom: 2px solid #3d3d3d;
+  flex-shrink: 0;
+}
+
+.stammdaten-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1rem;
+  background-color: var(--dark-bg);
+}
+
+.stammdaten-abteilung {
+  background-color: var(--card-bg);
+  border-radius: 8px;
+  margin-bottom: 1.5rem;
+  overflow: hidden;
+}
+
+.stammdaten-abteilung .abteilung-header {
+  padding: 1rem 1.5rem;
+  color: white;
+}
+
+.stammdaten-abteilung .abteilung-mitarbeiter {
+  padding: 1rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+  gap: 1rem;
+}
+
+/* Mitarbeiter-Karte */
+.mitarbeiter-karte {
+  background-color: #1a1a1a;
+  border: 1px solid #3d3d3d;
+  border-radius: 8px;
+  overflow: hidden;
+  transition: all 0.2s ease;
+}
+
+.mitarbeiter-karte:hover {
+  border-color: var(--primary-color);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.mitarbeiter-karte.ausgetreten {
+  opacity: 0.7;
+  background-color: rgba(220, 53, 69, 0.05);
+}
+
+.mitarbeiter-karte .karte-header {
+  padding: 1rem;
+  background-color: #2d2d2d;
+  border-bottom: 1px solid #3d3d3d;
+}
+
+.mitarbeiter-karte .karte-body {
+  padding: 1rem;
+}
+
+/* Info-Boxen */
+.info-box {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  background-color: rgba(255, 255, 255, 0.03);
+  border-radius: 6px;
+  border: 1px solid transparent;
+  transition: all 0.2s ease;
+  min-height: 80px;
+}
+
+.info-box:hover {
+  background-color: rgba(255, 255, 255, 0.06);
+  transform: translateY(-2px);
+}
+
+.info-box.clickable {
+  cursor: pointer;
+}
+
+.info-box.urlaub:hover {
+  border-color: var(--success-color);
+}
+
+.info-box.krankheit:hover {
+  border-color: var(--danger-color);
+}
+
+.info-box.schulung:hover {
+  border-color: var(--info-color);
+}
+
+.info-box.ueberstunden:hover {
+  border-color: var(--warning-color);
+}
+
+.info-box .info-icon {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  font-size: 1.25rem;
+}
+
+.info-box.urlaub .info-icon {
+  background-color: rgba(40, 167, 69, 0.2);
+  color: var(--success-color);
+}
+
+.info-box.krankheit .info-icon {
+  background-color: rgba(220, 53, 69, 0.2);
+  color: var(--danger-color);
+}
+
+.info-box.schulung .info-icon {
+  background-color: rgba(23, 162, 184, 0.2);
+  color: var(--info-color);
+}
+
+.info-box.ueberstunden .info-icon {
+  background-color: rgba(255, 193, 7, 0.2);
+  color: var(--warning-color);
+}
+
+.info-box .info-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.info-box .info-label {
+  font-size: 0.75rem;
+  color: #6c757d;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 0.25rem;
+}
+
+.info-box .info-value {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #e0e0e0;
+  line-height: 1;
+  margin-bottom: 0.25rem;
+}
+
+.info-box .info-detail {
+  font-size: 0.8rem;
+  color: #9ca3af;
+}
+
+/* Tabelle */
 .table {
   color: #e0e0e0;
   margin-bottom: 0;
   font-size: 0.85rem;
-  table-layout: fixed;
-  width: 100%;
 }
 
 .table-dark {
   background-color: #2d2d2d;
-  color: #e0e0e0;
 }
 
 .table-hover tbody tr:hover {
   background-color: rgba(255, 255, 255, 0.075);
-  cursor: pointer;
-}
-
-/* Abteilungs-Header nicht hovern und Farbe beibehalten */
-.table-hover tbody tr.abteilung-header:hover {
-  cursor: default;
-}
-
-.table-hover tbody tr.abteilung-header:hover td {
-  background-color: inherit !important;
 }
 
 .table thead th {
-  border-bottom: 2px solid #495057;
-  font-weight: 600;
-  text-transform: uppercase;
-  font-size: 0.7rem;
-  letter-spacing: 0.3px;
   position: sticky;
   top: 0;
   z-index: 5;
@@ -178,48 +302,17 @@ header.bg-primary {
   padding: 0.4rem 0.5rem;
 }
 
-/* Spaltenbreiten definieren */
-.table thead th:nth-child(1) { width: 25%; }
-.table thead th:nth-child(2) { width: 12.5%; }
-.table thead th:nth-child(3) { width: 12.5%; }
-.table thead th:nth-child(4) { width: 12.5%; }
-.table thead th:nth-child(5) { width: 12.5%; }
-.table thead th:nth-child(6) { width: 12.5%; }
-.table thead th:nth-child(7) { width: 12.5%; }
-
 .table tbody td {
-  vertical-align: middle;
   padding: 0.3rem 0.5rem;
-  line-height: 1.3;
 }
 
 /* Abteilungs-Header Zeile */
 .abteilung-header td {
-  font-size: 0.85rem;
-  letter-spacing: 0.3px;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
   font-weight: 600;
-  padding: 0.5rem 0.5rem !important;
+  padding: 0.5rem !important;
 }
 
 /* Badges */
-.badge-urlaub {
-  background-color: var(--success-color);
-}
-
-.badge-krank {
-  background-color: var(--danger-color);
-}
-
-.badge-schulung {
-  background-color: var(--info-color);
-}
-
-.badge-ueberstunden {
-  background-color: var(--warning-color);
-}
-
-/* Abteilungs-Badge */
 .abteilung-badge {
   display: inline-block;
   padding: 2px 8px;
@@ -227,27 +320,6 @@ header.bg-primary {
   font-size: 0.75rem;
   font-weight: 500;
   color: white;
-}
-
-/* Cards */
-.card {
-  background-color: var(--card-bg);
-  border: 1px solid #3d3d3d;
-}
-
-.card-body {
-  color: #e0e0e0;
-}
-
-.card-footer {
-  border-top: 1px solid #495057;
-}
-
-/* Buttons */
-.btn-group-sm > .btn,
-.btn-sm {
-  font-size: 0.8rem;
-  padding: 0.2rem 0.4rem;
 }
 
 /* Form Controls */
@@ -263,11 +335,6 @@ header.bg-primary {
   background-color: #2d2d2d;
   border-color: var(--primary-color);
   color: #e0e0e0;
-  box-shadow: 0 0 0 0.2rem rgba(31, 83, 141, 0.25);
-}
-
-.form-control::placeholder {
-  color: #6c757d;
 }
 
 /* Modals */
@@ -276,84 +343,29 @@ header.bg-primary {
   border: 1px solid #495057;
 }
 
-.modal-header {
-  border-bottom-color: #495057;
-}
-
-.modal-footer {
-  border-top-color: #495057;
-}
-
-/* Toast Notifications */
+/* Toast */
 .toast {
   background-color: var(--card-bg);
-  border: 1px solid #495057;
 }
 
-.toast-header {
-  background-color: #2d2d2d;
-  border-bottom-color: #495057;
-  color: #e0e0e0;
+/* Klickbare Elemente */
+.clickable {
+  cursor: pointer;
+  transition: all 0.15s ease;
 }
 
-.toast-body {
-  color: #e0e0e0;
+.clickable:hover {
+  opacity: 0.8;
 }
 
-/* Dropdown */
-.dropdown-menu {
-  background-color: var(--card-bg);
-  border-color: #495057;
-  z-index: 1050;
+/* Navigation Active */
+.navbar .nav-link.active {
+  background-color: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  font-weight: 600;
 }
 
-.dropdown-item {
-  color: #e0e0e0;
-}
-
-.dropdown-item:hover,
-.dropdown-item:focus {
-  background-color: #3d3d3d;
-  color: #fff;
-}
-
-/* Loading Overlay */
-.loading-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background-color: rgba(0, 0, 0, 0.7);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 9999;
-}
-
-.loading-overlay .spinner-border {
-  width: 3rem;
-  height: 3rem;
-  border-width: 0.3em;
-}
-
-/* Loading Spinner */
-.spinner-border-sm {
-  width: 1rem;
-  height: 1rem;
-  border-width: 0.15em;
-}
-
-/* Utility Classes */
-.text-muted {
-  color: #6c757d !important;
-}
-
-.opacity-75 {
-  opacity: 0.75;
-}
-
-/* Scrollbar Styling (WebKit) */
+/* Scrollbar */
 ::-webkit-scrollbar {
   width: 12px;
   height: 12px;
@@ -368,31 +380,20 @@ header.bg-primary {
   border-radius: 6px;
 }
 
-::-webkit-scrollbar-thumb:hover {
-  background: #5a6268;
+/* Responsive */
+@media (max-width: 1200px) {
+  .stammdaten-abteilung .abteilung-mitarbeiter {
+    grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+  }
 }
 
-/* Responsive */
 @media (max-width: 768px) {
-  .table {
-    font-size: 0.75rem;
-  }
-
-  .btn-sm {
-    font-size: 0.7rem;
-  }
-
-  .toolbar {
-    flex-wrap: wrap;
-  }
-
-  .toolbar-item:first-child,
-  .toolbar-item:nth-child(2) {
-    width: 100%;
+  .stammdaten-abteilung .abteilung-mitarbeiter {
+    grid-template-columns: 1fr;
   }
   
-  .subnav .navbar-nav {
-    flex-direction: column !important;
+  .toolbar {
+    flex-wrap: wrap;
   }
 }
 
@@ -410,117 +411,4 @@ header.bg-primary {
 
 .fade-in {
   animation: fadeIn 0.3s ease-in-out;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-.spinning {
-  animation: spin 1s linear infinite;
-}
-
-/* Zahlen-Highlighting - ENTFERNT */
-.number-positive,
-.number-negative,
-.number-warning,
-.number-neutral {
-  color: #e0e0e0;
-  font-weight: normal;
-}
-
-/* Klickbare Tabellenzellen */
-.clickable {
-  cursor: pointer;
-  transition: all 0.15s ease;
-  position: relative;
-}
-
-.clickable:hover {
-  background-color: rgba(255, 255, 255, 0.1);
-  text-decoration: underline;
-}
-
-.clickable-name:hover {
-  color: var(--info-color);
-}
-
-.clickable::after {
-  content: '';
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: 2px;
-  background-color: currentColor;
-  transform: scaleX(0);
-  transition: transform 0.2s ease;
-}
-
-.clickable:hover::after {
-  transform: scaleX(1);
-}
-
-/* Toolbar Improvements */
-#suchfeld::placeholder {
-  color: #6c757d;
-  opacity: 1;
-}
-
-#btnAktualisieren:hover i {
-  animation: spin 1s linear infinite;
-}
-
-/* Empty State */
-.empty-state {
-  padding: 4rem 2rem;
-  text-align: center;
-  color: #6c757d;
-}
-
-.empty-state i {
-  font-size: 4rem;
-  margin-bottom: 1rem;
-  opacity: 0.5;
-}
-
-/* Ansicht Toggle Button - aktiver Zustand */
-#btnAnsichtToggle.btn-outline-info:hover {
-  background-color: var(--info-color);
-  color: white;
-}
-
-#btnAnsichtToggle span {
-  margin-left: 0.25rem;
-}
-
-.mitarbeiter-ausgetreten {
-  background-color: rgba(220, 53, 69, 0.1) !important;
-}
-
-.mitarbeiter-ausgetreten:hover {
-  background-color: rgba(220, 53, 69, 0.15) !important;
-}
-
-/* Klickbarer Übertrag im Detail-Dialog */
-#clickUebertrag {
-  cursor: pointer;
-  transition: background-color 0.2s;
-}
-
-#clickUebertrag:hover {
-  background-color: rgba(23, 162, 184, 0.1);
-}
-
-#clickUebertrag:hover i {
-  color: var(--info-color);
-}
-
-/* Navigation Active States */
-.navbar .nav-link.active {
-  background-color: rgba(255, 255, 255, 0.1);
-  border-radius: 4px;
-  font-weight: 600;
 }
