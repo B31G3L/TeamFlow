@@ -1,6 +1,10 @@
 /**
  * Stammdaten-Ansicht Komponente
  * Zeigt Mitarbeiter übersichtlich gruppiert nach Abteilungen
+ * 
+ * UPDATE:
+ * - Grüner "Mitarbeiter anlegen" Button entfernt
+ * - Detail-Dialog beim Klick auf Namen oder Info-Button
  */
 
 class StammdatenAnsicht {
@@ -43,18 +47,13 @@ class StammdatenAnsicht {
       <div class="stammdaten-header">
         <div class="container-fluid py-3">
           <div class="row align-items-center">
-            <div class="col-md-8">
+            <div class="col-md-12">
               <h4 class="mb-0">
                 <i class="bi bi-people-fill"></i> Mitarbeiter-Übersicht
               </h4>
               <p class="text-muted mb-0">
                 Gesamt: ${this.aktuelleStatistiken.length} Mitarbeiter
               </p>
-            </div>
-            <div class="col-md-4 text-end">
-              <button class="btn btn-success" id="btnMitarbeiterAnlegen">
-                <i class="bi bi-plus-circle"></i> Mitarbeiter anlegen
-              </button>
             </div>
           </div>
         </div>
@@ -68,7 +67,7 @@ class StammdatenAnsicht {
         <div class="text-center py-5 text-muted">
           <i class="bi bi-inbox fs-1 d-block mb-3"></i>
           <h5>Keine Mitarbeiter gefunden</h5>
-          <p>Legen Sie den ersten Mitarbeiter an.</p>
+          <p>Legen Sie den ersten Mitarbeiter über die Subnavigation an.</p>
         </div>
       `;
     } else {
@@ -153,6 +152,7 @@ class StammdatenAnsicht {
 
   /**
    * Rendert eine Mitarbeiter-Karte
+   * UPDATE: Namen und Info-Button öffnen Detail-Dialog
    */
   _renderMitarbeiterKarte(stat) {
     const ma = stat.mitarbeiter;
@@ -162,8 +162,8 @@ class StammdatenAnsicht {
       <div class="mitarbeiter-karte ${istAusgetreten ? 'ausgetreten' : ''}">
         <div class="karte-header">
           <div class="d-flex justify-content-between align-items-start">
-            <div class="flex-grow-1">
-              <h6 class="mb-1 clickable" data-action="details" data-id="${ma.id}">
+            <div class="flex-grow-1 clickable" data-action="details" data-id="${ma.id}" style="cursor: pointer;">
+              <h6 class="mb-1">
                 <i class="bi bi-person-circle"></i> ${ma.vorname} ${ma.nachname}
                 ${istAusgetreten ? '<span class="badge bg-danger ms-2"><i class="bi bi-box-arrow-right"></i> Ausgetreten</span>' : ''}
               </h6>
@@ -249,26 +249,17 @@ class StammdatenAnsicht {
    * Initialisiert Event-Listener
    */
   _initEventListeners() {
-    // Mitarbeiter anlegen Button
-    const btnAnlegen = document.getElementById('btnMitarbeiterAnlegen');
-    if (btnAnlegen) {
-      btnAnlegen.addEventListener('click', async () => {
-        await this.dialogManager.zeigeStammdatenHinzufuegen(async () => {
-          await this.zeigen();
-        });
-      });
-    }
-
     // Event Delegation für alle Click-Actions
     this.container.addEventListener('click', async (e) => {
       const clickable = e.target.closest('[data-action]');
       if (!clickable) return;
 
       const action = clickable.dataset.action;
-      const id = parseInt(clickable.dataset.id);
+      const id = clickable.dataset.id; // String behalten - nicht zu Integer parsen!
 
       switch (action) {
         case 'details':
+          // Detail-Dialog öffnen und danach zurück zur Stammdatenansicht
           await this.dialogManager.zeigeDetails(id, this.dataManager.aktuellesJahr);
           await this.zeigen(); // Reload nach Dialog
           break;
@@ -304,7 +295,8 @@ class StammdatenAnsicht {
           break;
 
         case 'bearbeite-abteilung':
-          await this.dialogManager.zeigeAbteilungBearbeiten(id, async () => {
+          const abteilungId = parseInt(clickable.dataset.id); // Abteilungs-ID ist Integer
+          await this.dialogManager.zeigeAbteilungBearbeiten(abteilungId, async () => {
             await this.zeigen();
           });
           break;
