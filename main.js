@@ -15,6 +15,7 @@ const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const Database = require('better-sqlite3');
+const { spawn } = require('child_process');
 
 let mainWindow;
 let db;
@@ -748,4 +749,44 @@ process.on('unhandledRejection', (reason, promise) => {
     reason: reason,
     promise: promise
   });
+});
+
+
+
+// Script-Verzeichnis zurückgeben
+ipcMain.handle('get-script-directory', async () => {
+  const isDev = !app.isPackaged;
+  return isDev ? __dirname : process.resourcesPath;
+});
+
+// Command ausführen (für Python-Scripts)
+ipcMain.handle('execute-command', async (event, command, args) => {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, { shell: true });
+
+    let stdout = '';
+    let stderr = '';
+
+    child.stdout.on('data', (data) => {
+      stdout += data.toString();
+    });
+
+    child.stderr.on('data', (data) => {
+      stderr += data.toString();
+    });
+
+    child.on('close', (code) => {
+      resolve({ code, stdout, stderr });
+    });
+
+    child.on('error', (error) => {
+      reject(error);
+    });
+  });
+});
+
+// Datei öffnen/präsentieren
+ipcMain.handle('present-file', async (event, filePath) => {
+  const { shell } = require('electron');
+  await shell.openPath(filePath);
 });

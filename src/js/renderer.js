@@ -492,6 +492,8 @@ async function loadData() {
  */
 async function exportToExcel() {
   try {
+    showNotification('Export', 'Excel-Export wird erstellt...', 'info');
+    
     const stats = await dataManager.getAlleStatistiken();
 
     if (stats.length === 0) {
@@ -499,11 +501,41 @@ async function exportToExcel() {
       return;
     }
 
-    // TODO: Excel-Export implementieren
-    // Hier wird später die openpyxl-basierte Python-Funktion aufgerufen
-    
-    showNotification('Info', 'Excel-Export wird implementiert...', 'info');
-    console.log('Excel-Export für', stats.length, 'Mitarbeiter');
+    // Daten vorbereiten
+    const exportData = stats.map(stat => ({
+      vorname: stat.vorname,
+      nachname: stat.nachname,
+      abteilung: stat.abteilung,
+      urlaub_anspruch: stat.urlaub_anspruch,
+      urlaub_uebertrag: stat.urlaub_uebertrag,
+      urlaub_genommen: stat.urlaub_genommen,
+      krankheit: stat.krankheit,
+      schulung: stat.schulung,
+      ueberstunden: stat.ueberstunden
+    }));
+
+    const dataJson = JSON.stringify(exportData);
+    const jahr = dataManager.aktuellesJahr;
+    const outputPath = `/mnt/user-data/outputs/teamplanner_${jahr}.xlsx`;
+
+    // Script-Verzeichnis vom Main-Process holen
+    const scriptDir = await window.electronAPI.getScriptDirectory();
+
+    // Python-Script aufrufen
+    const result = await window.electronAPI.executeCommand(
+      'python3',
+      [`${scriptDir}/export_excel.py`, dataJson, jahr.toString(), outputPath]
+    );
+
+    const response = JSON.parse(result.stdout);
+
+    if (response.success) {
+      showNotification('Export erfolgreich', `Excel-Datei wurde erstellt: teamplanner_${jahr}.xlsx`, 'success');
+      // Datei präsentieren
+      await window.electronAPI.presentFile(outputPath);
+    } else {
+      throw new Error(response.error || 'Unbekannter Fehler');
+    }
 
   } catch (error) {
     console.error('Fehler beim Excel-Export:', error);
@@ -516,6 +548,8 @@ async function exportToExcel() {
  */
 async function exportToPDF() {
   try {
+    showNotification('Export', 'PDF-Export wird erstellt...', 'info');
+    
     const stats = await dataManager.getAlleStatistiken();
 
     if (stats.length === 0) {
@@ -523,11 +557,41 @@ async function exportToPDF() {
       return;
     }
 
-    // TODO: PDF-Export implementieren
-    // Hier wird später die reportlab-basierte Python-Funktion aufgerufen
-    
-    showNotification('Info', 'PDF-Export wird implementiert...', 'info');
-    console.log('PDF-Export für', stats.length, 'Mitarbeiter');
+    // Daten vorbereiten
+    const exportData = stats.map(stat => ({
+      vorname: stat.vorname,
+      nachname: stat.nachname,
+      abteilung: stat.abteilung,
+      urlaub_anspruch: stat.urlaub_anspruch,
+      urlaub_uebertrag: stat.urlaub_uebertrag,
+      urlaub_genommen: stat.urlaub_genommen,
+      krankheit: stat.krankheit,
+      schulung: stat.schulung,
+      ueberstunden: stat.ueberstunden
+    }));
+
+    const dataJson = JSON.stringify(exportData);
+    const jahr = dataManager.aktuellesJahr;
+    const outputPath = `/mnt/user-data/outputs/teamplanner_${jahr}.pdf`;
+
+    // Script-Verzeichnis vom Main-Process holen
+    const scriptDir = await window.electronAPI.getScriptDirectory();
+
+    // Python-Script aufrufen
+    const result = await window.electronAPI.executeCommand(
+      'python3',
+      [`${scriptDir}/export_pdf.py`, dataJson, jahr.toString(), outputPath]
+    );
+
+    const response = JSON.parse(result.stdout);
+
+    if (response.success) {
+      showNotification('Export erfolgreich', `PDF-Datei wurde erstellt: teamplanner_${jahr}.pdf`, 'success');
+      // Datei präsentieren
+      await window.electronAPI.presentFile(outputPath);
+    } else {
+      throw new Error(response.error || 'Unbekannter Fehler');
+    }
 
   } catch (error) {
     console.error('Fehler beim PDF-Export:', error);

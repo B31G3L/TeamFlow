@@ -14,6 +14,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   showOpenDialog: (options) => ipcRenderer.invoke('dialog:openFile', options),
   writeFile: (filePath, data) => ipcRenderer.invoke('fs:writeFile', filePath, data),
   
+  getScriptDirectory: () => ipcRenderer.invoke('get-script-directory'),
+  executeCommand: (command, args) => ipcRenderer.invoke('execute-command', command, args),
+  presentFile: (filePath) => ipcRenderer.invoke('present-file', filePath),
   // App-Informationen
   getAppPath: (name) => ipcRenderer.invoke('app:getPath', name),
   getAppVersion: () => ipcRenderer.invoke('app:getVersion'),
@@ -32,3 +35,5 @@ contextBridge.exposeInMainWorld('electronAPI', {
     exec: (sql) => ipcRenderer.invoke('db:exec', sql)
   }
 });
+
+
