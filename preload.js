@@ -26,6 +26,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getLogPath: () => ipcRenderer.invoke('app:getLogPath'),
   getLogFiles: () => ipcRenderer.invoke('app:getLogFiles'),
   readLog: (logFile) => ipcRenderer.invoke('app:readLog', logFile),
+  // Export-Funktionen
+exportExcel: (data) => ipcRenderer.invoke('export:excel', data),
+exportPdf: (data) => ipcRenderer.invoke('export:pdf', data),
   
   // Datenbank-Operationen (WICHTIG: Korrekt verschachtelt unter .db)
   db: {

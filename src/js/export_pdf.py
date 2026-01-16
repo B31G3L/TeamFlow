@@ -1,42 +1,39 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
-PDF Export für Teamplanner
-Erstellt professionelles PDF mit Mitarbeiter-Statistiken
+PDF-Export für Teamplanner
+Erstellt eine formatierte PDF-Datei aus Urlaubsdaten
 """
 
 import sys
 import json
-from reportlab.lib import colors
-from reportlab.lib.pagesizes import A4, landscape
-from reportlab.lib.units import cm
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.enums import TA_CENTER
+from datetime import datetime
+from pathlib import Path
 
-def format_number(value):
-    """Formatiert Zahlen: Ganzzahlen ohne Nachkommastellen, Dezimalzahlen mit 2 Stellen"""
-    if value is None or value == '':
-        return '0'
-    
-    try:
-        num = float(value)
-        if num == int(num):
-            return str(int(num))
-        return f"{num:.2f}"
-    except (ValueError, TypeError):
-        return '0'
+try:
+    from reportlab.lib.pagesizes import A4, landscape
+    from reportlab.lib import colors
+    from reportlab.lib.units import cm
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.ttfonts import TTFont
+except ImportError:
+    print("FEHLER: reportlab nicht installiert!", file=sys.stderr)
+    print("Installiere mit: pip install reportlab", file=sys.stderr)
+    sys.exit(1)
 
-def create_pdf(data, jahr, output_path):
-    """Erstellt PDF-Datei mit Mitarbeiter-Daten"""
+
+def create_pdf(data, output_path):
+    """Erstellt PDF-Datei mit formatierten Urlaubsdaten"""
     
-    # Querformat A4
     doc = SimpleDocTemplate(
         output_path,
         pagesize=landscape(A4),
-        leftMargin=1*cm,
-        rightMargin=1*cm,
         topMargin=1.5*cm,
-        bottomMargin=1.5*cm
+        bottomMargin=1.5*cm,
+        leftMargin=1.5*cm,
+        rightMargin=1.5*cm
     )
     
     elements = []
@@ -49,109 +46,80 @@ def create_pdf(data, jahr, output_path):
         fontSize=18,
         textColor=colors.HexColor('#1F538D'),
         spaceAfter=20,
-        alignment=TA_CENTER
+        alignment=1  # Center
     )
     
-    title = Paragraph(f"Teamplanner - Urlaubsplaner {jahr}", title_style)
+    title = Paragraph("Urlaubsübersicht", title_style)
     elements.append(title)
     elements.append(Spacer(1, 0.5*cm))
     
-    # Tabellendaten vorbereiten
-    table_data = [[
-        'Vorname', 'Nachname', 'Abteilung', 'Anspruch', 'Übertrag',
-        'Verfügbar', 'Genommen', 'Rest', 'Krank', 'Schulung', 'Überstunden'
-    ]]
-    
-    for mitarbeiter in data:
-        anspruch = format_number(mitarbeiter.get('urlaub_anspruch', 0))
-        uebertrag = format_number(mitarbeiter.get('urlaub_uebertrag', 0))
-        genommen = format_number(mitarbeiter.get('urlaub_genommen', 0))
-        
-        # Berechne Verfügbar und Rest
-        try:
-            verfuegbar = float(anspruch) + float(uebertrag)
-            rest = verfuegbar - float(genommen)
-        except (ValueError, TypeError):
-            verfuegbar = 0
-            rest = 0
-        
-        row = [
-            mitarbeiter.get('vorname', ''),
-            mitarbeiter.get('nachname', ''),
-            mitarbeiter.get('abteilung', ''),
-            anspruch,
-            uebertrag,
-            format_number(verfuegbar),
-            genommen,
-            format_number(rest),
-            format_number(mitarbeiter.get('krankheit', 0)),
-            format_number(mitarbeiter.get('schulung', 0)),
-            format_number(mitarbeiter.get('ueberstunden', 0))
-        ]
-        table_data.append(row)
-    
     # Tabelle erstellen
-    col_widths = [2.2*cm, 2.2*cm, 3*cm, 1.8*cm, 1.8*cm, 1.8*cm, 1.8*cm, 1.5*cm, 1.5*cm, 1.8*cm, 2*cm]
+    table_data = [["Mitarbeiter", "Abteilung", "Von", "Bis", "Tage", "Notiz"]]
     
-    table = Table(table_data, colWidths=col_widths, repeatRows=1)
+    for entry in data:
+        table_data.append([
+            entry.get('mitarbeiter', ''),
+            entry.get('abteilung', ''),
+            entry.get('von', ''),
+            entry.get('bis', ''),
+            str(entry.get('tage', 0)),
+            entry.get('notiz', '')[:50]  # Kürzen für PDF
+        ])
     
-    # Tabellen-Stil
+    table = Table(table_data, colWidths=[5*cm, 4*cm, 3*cm, 3*cm, 2*cm, 7*cm])
+    
+    # Tabellen-Style
     table.setStyle(TableStyle([
-        # Header-Style
+        # Header
         ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1F538D')),
         ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
         ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, 0), 10),
+        ('FONTSIZE', (0, 0), (-1, 0), 11),
         ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-        ('TOPPADDING', (0, 0), (-1, 0), 12),
         
-        # Daten-Style
-        ('ALIGN', (0, 1), (1, -1), 'LEFT'),
-        ('ALIGN', (2, 1), (-1, -1), 'CENTER'),
+        # Daten
+        ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
         ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
         ('FONTSIZE', (0, 1), (-1, -1), 9),
-        ('TOPPADDING', (0, 1), (-1, -1), 6),
-        ('BOTTOMPADDING', (0, 1), (-1, -1), 6),
-        
-        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F5F5F5')]),
-        
-        ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+        ('ALIGN', (0, 1), (-1, -1), 'LEFT'),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.lightgrey]),
     ]))
     
     elements.append(table)
     
     # PDF erstellen
     doc.build(elements)
+    print(f"✅ PDF erfolgreich erstellt: {output_path}")
 
-if __name__ == "__main__":
-    try:
-        if len(sys.argv) != 4:
-            print(json.dumps({
-                "success": False,
-                "error": "Usage: export_pdf.py <json_file_path> <jahr> <output_path>"
-            }))
-            sys.exit(1)
-        
-        json_file_path = sys.argv[1]
-        jahr = sys.argv[2]
-        output_path = sys.argv[3]
-        
-        # Lese JSON aus Datei statt aus Command-Line
-        with open(json_file_path, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-        
-        create_pdf(data, jahr, output_path)
-        
-        print(json.dumps({
-            "success": True,
-            "path": output_path
-        }))
-        
-    except Exception as e:
-        print(json.dumps({
-            "success": False,
-            "error": str(e)
-        }))
+
+def main():
+    if len(sys.argv) != 3:
+        print("FEHLER: Falsche Anzahl Parameter!", file=sys.stderr)
+        print("Usage: python export_to_pdf.py <input.json> <output.pdf>", file=sys.stderr)
         sys.exit(1)
+    
+    input_file = sys.argv[1]
+    output_file = sys.argv[2]
+    
+    # JSON lesen
+    try:
+        with open(input_file, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        print(f"📄 JSON gelesen: {len(data)} Einträge")
+    except Exception as e:
+        print(f"FEHLER beim Lesen der JSON: {e}", file=sys.stderr)
+        sys.exit(1)
+    
+    # PDF erstellen
+    try:
+        create_pdf(data, output_file)
+    except Exception as e:
+        print(f"FEHLER beim Erstellen der PDF: {e}", file=sys.stderr)
+        sys.exit(1)
+
+
+if __name__ == '__main__':
+    main()

@@ -175,7 +175,35 @@ function getDatabasePath() {
   
   return dbPath;
 }
-
+/**
+ * Ermittelt den Pfad für Export-Dateien (neben der .exe)
+ * NEU: Eigener Export-Ordner für Excel/PDF
+ */
+function getExportPath() {
+  let basePath;
+  
+  if (app.isPackaged) {
+    // PORTABLE: Export-Ordner liegt neben der .exe
+    if (process.env.PORTABLE_EXECUTABLE_DIR) {
+      basePath = process.env.PORTABLE_EXECUTABLE_DIR;
+    } else {
+      basePath = path.dirname(app.getPath('exe'));
+    }
+  } else {
+    // Development: Export liegt im Projekt-Root
+    basePath = __dirname;
+  }
+  
+  const exportPath = path.join(basePath, 'Export');
+  
+  // Stelle sicher, dass das Export-Verzeichnis existiert
+  if (!fs.existsSync(exportPath)) {
+    fs.mkdirSync(exportPath, { recursive: true });
+    logger.info('📁 Export-Ordner erstellt', { path: exportPath });
+  }
+  
+  return exportPath;
+}
 /**
  * Initialisiert die Datenbank
  */
@@ -487,7 +515,7 @@ function createWindow() {
       contextIsolation: true,
       preload: path.join(__dirname, 'preload.js')
     },
-    icon: path.join(__dirname, 'src/assets/logo.png'),
+    icon: path.join(__dirname, 'src/assets/logo.ico'),
     backgroundColor: '#1a1a1a',
     show: false,
     autoHideMenuBar: true // FIX: Blendet die Menüleiste (File, Edit, etc.) aus
@@ -562,6 +590,10 @@ app.on('window-all-closed', () => {
  * Validiert ob ein Dateipfad sicher ist
  * SECURITY: Verhindert Path-Traversal-Angriffe
  */
+/**
+ * Validiert ob ein Dateipfad sicher ist
+ * SECURITY: Verhindert Path-Traversal-Angriffe
+ */
 function isPathSafe(filePath) {
   try {
     const normalized = path.normalize(filePath);
@@ -574,6 +606,10 @@ function isPathSafe(filePath) {
       app.getPath('desktop'),
       app.getPath('temp')
     ];
+    
+    // NEU: Export-Ordner neben der Datenbank erlauben
+    const exportPath = getExportPath();
+    allowedDirs.push(exportPath);
     
     // Prüfe ob Pfad in einem erlaubten Verzeichnis liegt
     return allowedDirs.some(dir => {
@@ -607,22 +643,34 @@ ipcMain.handle('fs:writeFile', async (event, filePath, data) => {
   logger.info('📝 Schreibe Datei', { path: filePath, size: data.length });
   
   try {
+    // NEU: Wenn Pfad /mnt/user-data/outputs enthält, schreibe in Export-Ordner
+    let finalPath = filePath;
+    if (filePath.includes('/mnt/user-data/outputs')) {
+      const fileName = path.basename(filePath);
+      const exportDir = getExportPath();
+      finalPath = path.join(exportDir, fileName);
+      logger.info('📂 Pfad umgeleitet', { 
+        original: filePath, 
+        redirected: finalPath 
+      });
+    }
+    
     // SECURITY: Validiere Pfad
-    if (!isPathSafe(filePath)) {
+    if (!isPathSafe(finalPath)) {
       const error = 'Ungültiger Dateipfad: Zugriff verweigert';
-      logger.error('🚨 Security: Ungültiger Dateipfad blockiert', { path: filePath });
+      logger.error('🚨 Security: Ungültiger Dateipfad blockiert', { path: finalPath });
       return { success: false, error };
     }
     
     // Stelle sicher, dass das Verzeichnis existiert
-    const dir = path.dirname(filePath);
+    const dir = path.dirname(finalPath);
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
     }
     
-    fs.writeFileSync(filePath, data, 'utf8');
-    logger.success('✅ Datei erfolgreich geschrieben', { path: filePath });
-    return { success: true };
+    fs.writeFileSync(finalPath, data, 'utf8');
+    logger.success('✅ Datei erfolgreich geschrieben', { path: finalPath });
+    return { success: true, path: finalPath }; // NEU: Gebe echten Pfad zurück
   } catch (error) {
     logger.error('❌ Fehler beim Schreiben der Datei', {
       error: error.message,
@@ -789,4 +837,176 @@ ipcMain.handle('execute-command', async (event, command, args) => {
 ipcMain.handle('present-file', async (event, filePath) => {
   const { shell } = require('electron');
   await shell.openPath(filePath);
+});
+
+
+/**
+ * EXPORT-SYSTEM
+ * Erstellt Excel/PDF im Export-Ordner neben der .exe
+ */
+
+// Excel-Export
+ipcMain.handle('export:excel', async (event, data) => {
+  logger.info('📊 Excel-Export gestartet', { entries: data.length });
+  
+  try {
+    const exportDir = getExportPath();
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
+    const tempJsonPath = path.join(exportDir, `temp_${timestamp}.json`);
+    const outputPath = path.join(exportDir, `Urlaub_${timestamp}.xlsx`);
+    
+    // 1. JSON schreiben
+    fs.writeFileSync(tempJsonPath, JSON.stringify(data, null, 2), 'utf-8');
+    logger.info('✅ JSON geschrieben', { path: tempJsonPath });
+    
+    // 2. Python-Script Pfad ermitteln
+    const isDev = !app.isPackaged;
+    const scriptDir = isDev ? path.join(__dirname, 'scripts') : path.join(process.resourcesPath, 'scripts');
+    const scriptPath = path.join(scriptDir, 'export_to_excel.py');
+    
+    logger.info('🐍 Führe Python-Script aus', { script: scriptPath });
+    
+    // 3. Python ausführen
+    const pythonCmd = process.platform === 'win32' ? 'python' : 'python3';
+    const result = await new Promise((resolve) => {
+      const child = spawn(pythonCmd, [scriptPath, tempJsonPath, outputPath], { 
+        shell: true,
+        cwd: exportDir
+      });
+      
+      let stdout = '';
+      let stderr = '';
+      
+      child.stdout.on('data', (data) => {
+        const text = data.toString();
+        stdout += text;
+        logger.debug('Python:', text);
+      });
+      
+      child.stderr.on('data', (data) => {
+        const text = data.toString();
+        stderr += text;
+        logger.warn('Python stderr:', text);
+      });
+      
+      child.on('close', (code) => {
+        if (code === 0) {
+          logger.success('✅ Excel erfolgreich erstellt', { path: outputPath });
+          resolve({ success: true, path: outputPath });
+        } else {
+          logger.error('❌ Python-Script fehlgeschlagen', { code, stderr });
+          resolve({ success: false, error: `Exit Code ${code}: ${stderr}` });
+        }
+      });
+      
+      child.on('error', (error) => {
+        logger.error('❌ Python-Prozess Fehler', { error: error.message });
+        resolve({ success: false, error: error.message });
+      });
+    });
+    
+    // 4. Temporäre JSON löschen
+    try {
+      fs.unlinkSync(tempJsonPath);
+      logger.info('🗑️ Temporäre JSON gelöscht');
+    } catch (err) {
+      logger.warn('⚠️ Konnte temp JSON nicht löschen', { error: err.message });
+    }
+    
+    // 5. Ordner öffnen bei Erfolg
+    if (result.success) {
+      const { shell } = require('electron');
+      await shell.openPath(exportDir);
+      logger.info('📂 Export-Ordner geöffnet');
+    }
+    
+    return result;
+    
+  } catch (error) {
+    logger.error('❌ Excel-Export fehlgeschlagen', { error: error.message });
+    return { success: false, error: error.message };
+  }
+});
+
+// PDF-Export
+ipcMain.handle('export:pdf', async (event, data) => {
+  logger.info('📄 PDF-Export gestartet', { entries: data.length });
+  
+  try {
+    const exportDir = getExportPath();
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
+    const tempJsonPath = path.join(exportDir, `temp_${timestamp}.json`);
+    const outputPath = path.join(exportDir, `Urlaub_${timestamp}.pdf`);
+    
+    // 1. JSON schreiben
+    fs.writeFileSync(tempJsonPath, JSON.stringify(data, null, 2), 'utf-8');
+    logger.info('✅ JSON geschrieben', { path: tempJsonPath });
+    
+    // 2. Python-Script Pfad ermitteln
+    const isDev = !app.isPackaged;
+    const scriptDir = isDev ? path.join(__dirname, 'scripts') : path.join(process.resourcesPath, 'scripts');
+    const scriptPath = path.join(scriptDir, 'export_to_pdf.py');
+    
+    logger.info('🐍 Führe Python-Script aus', { script: scriptPath });
+    
+    // 3. Python ausführen
+    const pythonCmd = process.platform === 'win32' ? 'python' : 'python3';
+    const result = await new Promise((resolve) => {
+      const child = spawn(pythonCmd, [scriptPath, tempJsonPath, outputPath], { 
+        shell: true,
+        cwd: exportDir
+      });
+      
+      let stdout = '';
+      let stderr = '';
+      
+      child.stdout.on('data', (data) => {
+        const text = data.toString();
+        stdout += text;
+        logger.debug('Python:', text);
+      });
+      
+      child.stderr.on('data', (data) => {
+        const text = data.toString();
+        stderr += text;
+        logger.warn('Python stderr:', text);
+      });
+      
+      child.on('close', (code) => {
+        if (code === 0) {
+          logger.success('✅ PDF erfolgreich erstellt', { path: outputPath });
+          resolve({ success: true, path: outputPath });
+        } else {
+          logger.error('❌ Python-Script fehlgeschlagen', { code, stderr });
+          resolve({ success: false, error: `Exit Code ${code}: ${stderr}` });
+        }
+      });
+      
+      child.on('error', (error) => {
+        logger.error('❌ Python-Prozess Fehler', { error: error.message });
+        resolve({ success: false, error: error.message });
+      });
+    });
+    
+    // 4. Temporäre JSON löschen
+    try {
+      fs.unlinkSync(tempJsonPath);
+      logger.info('🗑️ Temporäre JSON gelöscht');
+    } catch (err) {
+      logger.warn('⚠️ Konnte temp JSON nicht löschen', { error: err.message });
+    }
+    
+    // 5. Ordner öffnen bei Erfolg
+    if (result.success) {
+      const { shell } = require('electron');
+      await shell.openPath(exportDir);
+      logger.info('📂 Export-Ordner geöffnet');
+    }
+    
+    return result;
+    
+  } catch (error) {
+    logger.error('❌ PDF-Export fehlgeschlagen', { error: error.message });
+    return { success: false, error: error.message };
+  }
 });

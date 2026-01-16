@@ -1,38 +1,34 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
-Excel Export für Teamplanner
-Erstellt professionelle Excel-Datei mit Mitarbeiter-Statistiken
+Excel-Export für Teamplanner
+Erstellt eine formatierte Excel-Datei aus Urlaubsdaten
 """
 
 import sys
 import json
-from openpyxl import Workbook
-from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+from datetime import datetime
+from pathlib import Path
 
-def format_number(value):
-    """Formatiert Zahlen: Ganzzahlen ohne Nachkommastellen, Dezimalzahlen mit 2 Stellen"""
-    if value is None or value == '':
-        return 0
-    
-    try:
-        num = float(value)
-        if num == int(num):
-            return int(num)
-        return round(num, 2)
-    except (ValueError, TypeError):
-        return 0
+try:
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+except ImportError:
+    print("FEHLER: openpyxl nicht installiert!", file=sys.stderr)
+    print("Installiere mit: pip install openpyxl", file=sys.stderr)
+    sys.exit(1)
 
-def create_excel(data, jahr, output_path):
-    """Erstellt Excel-Datei mit Mitarbeiter-Daten"""
+
+def create_excel(data, output_path):
+    """Erstellt Excel-Datei mit formatierten Urlaubsdaten"""
     
     wb = Workbook()
     ws = wb.active
-    ws.title = f"Urlaubsplaner {jahr}"
+    ws.title = "Urlaubsübersicht"
     
     # Header-Style
-    header_font = Font(bold=True, color="FFFFFF", size=11)
     header_fill = PatternFill(start_color="1F538D", end_color="1F538D", fill_type="solid")
-    header_alignment = Alignment(horizontal="center", vertical="center")
+    header_font = Font(color="FFFFFF", bold=True, size=12)
     border = Border(
         left=Side(style='thin'),
         right=Side(style='thin'),
@@ -40,125 +36,66 @@ def create_excel(data, jahr, output_path):
         bottom=Side(style='thin')
     )
     
-    # Header
-    headers = [
-        "Vorname", "Nachname", "Abteilung", "Anspruch", "Übertrag", 
-        "Verfügbar", "Genommen", "Rest", "Krank", "Schulung", "Überstunden"
-    ]
-    
-    for col_idx, header in enumerate(headers, start=1):
-        cell = ws.cell(row=1, column=col_idx, value=header)
-        cell.font = header_font
+    # Header schreiben
+    headers = ["Mitarbeiter", "Abteilung", "Von", "Bis", "Tage", "Notiz"]
+    for col, header in enumerate(headers, 1):
+        cell = ws.cell(row=1, column=col, value=header)
         cell.fill = header_fill
-        cell.alignment = header_alignment
+        cell.font = header_font
+        cell.alignment = Alignment(horizontal='center', vertical='center')
         cell.border = border
     
-    # Daten
-    center_alignment = Alignment(horizontal="center", vertical="center")
-    left_alignment = Alignment(horizontal="left", vertical="center")
+    # Daten schreiben
+    for row_idx, entry in enumerate(data, 2):
+        ws.cell(row=row_idx, column=1, value=entry.get('mitarbeiter', ''))
+        ws.cell(row=row_idx, column=2, value=entry.get('abteilung', ''))
+        ws.cell(row=row_idx, column=3, value=entry.get('von', ''))
+        ws.cell(row=row_idx, column=4, value=entry.get('bis', ''))
+        ws.cell(row=row_idx, column=5, value=entry.get('tage', 0))
+        ws.cell(row=row_idx, column=6, value=entry.get('notiz', ''))
+        
+        # Border für alle Zellen
+        for col in range(1, 7):
+            ws.cell(row=row_idx, column=col).border = border
     
-    for row_idx, mitarbeiter in enumerate(data, start=2):
-        # Vorname
-        cell = ws.cell(row=row_idx, column=1, value=mitarbeiter.get('vorname', ''))
-        cell.alignment = left_alignment
-        cell.border = border
-        
-        # Nachname
-        cell = ws.cell(row=row_idx, column=2, value=mitarbeiter.get('nachname', ''))
-        cell.alignment = left_alignment
-        cell.border = border
-        
-        # Abteilung
-        cell = ws.cell(row=row_idx, column=3, value=mitarbeiter.get('abteilung', ''))
-        cell.alignment = center_alignment
-        cell.border = border
-        
-        # Anspruch
-        cell = ws.cell(row=row_idx, column=4, value=format_number(mitarbeiter.get('urlaub_anspruch', 0)))
-        cell.alignment = center_alignment
-        cell.border = border
-        
-        # Übertrag
-        cell = ws.cell(row=row_idx, column=5, value=format_number(mitarbeiter.get('urlaub_uebertrag', 0)))
-        cell.alignment = center_alignment
-        cell.border = border
-        
-        # Verfügbar (Formel)
-        cell = ws.cell(row=row_idx, column=6, value=f"=D{row_idx}+E{row_idx}")
-        cell.alignment = center_alignment
-        cell.border = border
-        
-        # Genommen
-        cell = ws.cell(row=row_idx, column=7, value=format_number(mitarbeiter.get('urlaub_genommen', 0)))
-        cell.alignment = center_alignment
-        cell.border = border
-        
-        # Rest (Formel)
-        cell = ws.cell(row=row_idx, column=8, value=f"=F{row_idx}-G{row_idx}")
-        cell.alignment = center_alignment
-        cell.border = border
-        
-        # Krank
-        cell = ws.cell(row=row_idx, column=9, value=format_number(mitarbeiter.get('krankheit', 0)))
-        cell.alignment = center_alignment
-        cell.border = border
-        
-        # Schulung
-        cell = ws.cell(row=row_idx, column=10, value=format_number(mitarbeiter.get('schulung', 0)))
-        cell.alignment = center_alignment
-        cell.border = border
-        
-        # Überstunden
-        cell = ws.cell(row=row_idx, column=11, value=format_number(mitarbeiter.get('ueberstunden', 0)))
-        cell.alignment = center_alignment
-        cell.border = border
-    
-    # Spaltenbreiten
-    ws.column_dimensions['A'].width = 15
-    ws.column_dimensions['B'].width = 15
-    ws.column_dimensions['C'].width = 20
+    # Spaltenbreite anpassen
+    ws.column_dimensions['A'].width = 25
+    ws.column_dimensions['B'].width = 20
+    ws.column_dimensions['C'].width = 12
     ws.column_dimensions['D'].width = 12
-    ws.column_dimensions['E'].width = 12
-    ws.column_dimensions['F'].width = 12
-    ws.column_dimensions['G'].width = 12
-    ws.column_dimensions['H'].width = 10
-    ws.column_dimensions['I'].width = 10
-    ws.column_dimensions['J'].width = 12
-    ws.column_dimensions['K'].width = 14
-    
-    # Freeze Panes (Header fixieren)
-    ws.freeze_panes = 'A2'
+    ws.column_dimensions['E'].width = 8
+    ws.column_dimensions['F'].width = 40
     
     # Speichern
     wb.save(output_path)
+    print(f"✅ Excel erfolgreich erstellt: {output_path}")
 
-if __name__ == "__main__":
-    try:
-        if len(sys.argv) != 4:
-            print(json.dumps({
-                "success": False,
-                "error": "Usage: export_excel.py <json_file_path> <jahr> <output_path>"
-            }))
-            sys.exit(1)
-        
-        json_file_path = sys.argv[1]
-        jahr = sys.argv[2]
-        output_path = sys.argv[3]
-        
-        # Lese JSON aus Datei statt aus Command-Line
-        with open(json_file_path, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-        
-        create_excel(data, jahr, output_path)
-        
-        print(json.dumps({
-            "success": True,
-            "path": output_path
-        }))
-        
-    except Exception as e:
-        print(json.dumps({
-            "success": False,
-            "error": str(e)
-        }))
+
+def main():
+    if len(sys.argv) != 3:
+        print("FEHLER: Falsche Anzahl Parameter!", file=sys.stderr)
+        print("Usage: python export_to_excel.py <input.json> <output.xlsx>", file=sys.stderr)
         sys.exit(1)
+    
+    input_file = sys.argv[1]
+    output_file = sys.argv[2]
+    
+    # JSON lesen
+    try:
+        with open(input_file, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        print(f"📄 JSON gelesen: {len(data)} Einträge")
+    except Exception as e:
+        print(f"FEHLER beim Lesen der JSON: {e}", file=sys.stderr)
+        sys.exit(1)
+    
+    # Excel erstellen
+    try:
+        create_excel(data, output_file)
+    except Exception as e:
+        print(f"FEHLER beim Erstellen der Excel: {e}", file=sys.stderr)
+        sys.exit(1)
+
+
+if __name__ == '__main__':
+    main()
