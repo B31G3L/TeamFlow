@@ -118,23 +118,16 @@ class StammdatenAnsicht {
    * Rendert eine Abteilungsgruppe
    */
   _renderAbteilungsGruppe(gruppe) {
-    const { abteilung, stats } = gruppe;
+  const { abteilung, stats } = gruppe;
 
-    let html = `
-      <div class="stammdaten-abteilung" style="border-left: 4px solid ${abteilung.farbe}">
-        <div class="abteilung-header" style="background-color: ${abteilung.farbe}">
-          <div class="d-flex justify-content-between align-items-center">
-            <div>
-              <h5 class="mb-0 text-white">
-                <i class="bi bi-building"></i> ${abteilung.name}
-              </h5>
-              <small class="text-white opacity-75">${stats.length} Mitarbeiter</small>
-            </div>
-            <button class="btn btn-sm btn-light" data-action="bearbeite-abteilung" data-id="${abteilung.id}">
-              <i class="bi bi-pencil"></i> Bearbeiten
-            </button>
-          </div>
-        </div>
+  let html = `
+    <div class="stammdaten-abteilung stammdaten-abteilung-kompakt" style="border-left: 4px solid ${abteilung.farbe}">
+      <div class="abteilung-header" style="background-color: ${abteilung.farbe}">
+        <h6 class="mb-0 text-white">
+          <i class="bi bi-building"></i> ${abteilung.name}
+          <span class="ms-2 opacity-75">(${stats.length})</span>
+        </h6>
+      </div>
         <div class="abteilung-mitarbeiter">
     `;
 
@@ -260,7 +253,7 @@ class StammdatenAnsicht {
       switch (action) {
         case 'details':
           // Detail-Dialog öffnen und danach zurück zur Stammdatenansicht
-          await this.dialogManager.zeigeDetails(id, this.dataManager.aktuellesJahr);
+          await this.dialogManager.zeigeDetails(id, this.dataManager.aktuellesJahr, 'stammdaten');
           await this.zeigen(); // Reload nach Dialog
           break;
 
@@ -294,12 +287,7 @@ class StammdatenAnsicht {
           });
           break;
 
-        case 'bearbeite-abteilung':
-          const abteilungId = parseInt(clickable.dataset.id); // Abteilungs-ID ist Integer
-          await this.dialogManager.zeigeAbteilungBearbeiten(abteilungId, async () => {
-            await this.zeigen();
-          });
-          break;
+        
       }
     });
   }

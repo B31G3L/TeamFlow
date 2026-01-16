@@ -34,18 +34,7 @@ const SUBNAV_CONFIG = {
         }
       })
     },
-    {
-      id: 'subMitarbeiterVerwalten',
-      icon: 'bi-people',
-      text: 'Mitarbeiter verwalten',
-      action: () => dialogManager.zeigeStammdatenVerwalten(async () => {
-        if (aktuellesHauptmenu === 'stammdaten') {
-          await stammdatenAnsicht.zeigen();
-        } else {
-          await loadData();
-        }
-      })
-    },
+    { separator: true },  // ← NEU: Separator hinzugefügt
     {
       id: 'subAbteilungen',
       icon: 'bi-building',
@@ -394,7 +383,7 @@ async function initUI() {
 
     switch (action) {
       case 'details':
-        await dialogManager.zeigeDetails(mitarbeiterId, dataManager.aktuellesJahr);
+        await dialogManager.zeigeDetails(mitarbeiterId, dataManager.aktuellesJahr, 'urlaubsplaner');
         console.log('🔄 Detail-Dialog geschlossen - aktualisiere Haupttabelle');
         await loadData();
         if (aktuelleAnsicht === 'kalender') {

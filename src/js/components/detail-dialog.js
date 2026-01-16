@@ -18,8 +18,8 @@ class DetailDialog extends DialogBase {
   /**
    * Zeigt Detail-Dialog für einen Mitarbeiter
    */
-  async zeigeDetails(mitarbeiterId, jahr = null) {
-    jahr = jahr || this.dataManager.aktuellesJahr;
+async zeigeDetails(mitarbeiterId, jahr = null, herkunft = 'urlaubsplaner') {
+      jahr = jahr || this.dataManager.aktuellesJahr;
     
     const stat = await this.dataManager.getMitarbeiterStatistik(mitarbeiterId);
     if (!stat) {
@@ -53,15 +53,15 @@ class DetailDialog extends DialogBase {
               <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             
-            <!-- TAB NAVIGATION -->
+           <!-- TAB NAVIGATION -->
             <ul class="nav nav-tabs bg-dark px-3" id="detailTabs" role="tablist">
               <li class="nav-item" role="presentation">
-                <button class="nav-link active" id="stammdaten-tab" data-bs-toggle="tab" data-bs-target="#stammdaten" type="button" role="tab">
+                <button class="nav-link ${herkunft === 'stammdaten' ? 'active' : ''}" id="stammdaten-tab" data-bs-toggle="tab" data-bs-target="#stammdaten" type="button" role="tab">
                   <i class="bi bi-person-badge"></i> Stammdaten
                 </button>
               </li>
               <li class="nav-item" role="presentation">
-                <button class="nav-link" id="urlaub-tab" data-bs-toggle="tab" data-bs-target="#urlaub" type="button" role="tab">
+                <button class="nav-link ${herkunft === 'urlaubsplaner' ? 'active' : ''}" id="urlaub-tab" data-bs-toggle="tab" data-bs-target="#urlaub" type="button" role="tab">
                   <i class="bi bi-calendar-check"></i> Urlaubsplaner ${jahr}
                 </button>
               </li>
@@ -71,8 +71,7 @@ class DetailDialog extends DialogBase {
               <div class="tab-content" id="detailTabContent">
                 
                 <!-- TAB 1: STAMMDATEN -->
-                <div class="tab-pane fade show active" id="stammdaten" role="tabpanel">
-                  <div class="row g-0" style="height: calc(100vh - 180px);">
+                <div class="tab-pane fade ${herkunft === 'stammdaten' ? 'show active' : ''}" id="stammdaten" role="tabpanel">                  <div class="row g-0" style="height: calc(100vh - 180px);">
                     <div class="col-md-12" style="overflow-y: auto; background-color: #1a1a1a;">
                       <div class="p-4">
                         
@@ -202,7 +201,7 @@ class DetailDialog extends DialogBase {
                 </div>
 
                 <!-- TAB 2: URLAUB & ABWESENHEIT -->
-                <div class="tab-pane fade" id="urlaub" role="tabpanel">
+                <div class="tab-pane fade ${herkunft === 'urlaubsplaner' ? 'show active' : ''}" id="urlaub" role="tabpanel">
                   <div class="row g-0" style="height: calc(100vh - 180px);">
                     
                     <!-- LINKE SPALTE: Urlaub & Überstunden -->

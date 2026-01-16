@@ -412,3 +412,41 @@ body {
 .fade-in {
   animation: fadeIn 0.3s ease-in-out;
 }
+
+/* Kompaktere Stammdaten-Ansicht */
+.stammdaten-abteilung-kompakt {
+  margin-bottom: 1rem !important;
+}
+
+.stammdaten-abteilung-kompakt .abteilung-header {
+  padding: 0.5rem 1rem !important;
+}
+
+.stammdaten-abteilung-kompakt .abteilung-mitarbeiter {
+  padding: 0.75rem !important;
+  gap: 0.75rem !important;
+  grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)) !important;
+}
+
+.stammdaten-abteilung-kompakt .mitarbeiter-karte .karte-header {
+  padding: 0.75rem !important;
+}
+
+.stammdaten-abteilung-kompakt .mitarbeiter-karte .karte-body {
+  padding: 0.75rem !important;
+}
+
+.stammdaten-abteilung-kompakt .info-box {
+  padding: 0.5rem !important;
+  min-height: 65px !important;
+}
+
+.stammdaten-abteilung-kompakt .info-box .info-icon {
+  width: 35px !important;
+  height: 35px !important;
+  font-size: 1.1rem !important;
+}
+
+.stammdaten-abteilung-kompakt .info-box .info-value {
+  font-size: 1.1rem !important;
+}
