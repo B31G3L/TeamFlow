@@ -5,7 +5,8 @@
  * 
  * UPDATE:
  * - Tab 1: Stammdaten (Persönliche Daten, Arbeitsbeziehung, Arbeitszeit, Buttons)
- * - Tab 2: Urlaubsplaner (Urlaub, Überstunden, Krankheit, Schulung, Einträge)
+ * - Tab 2: Urlaubsplaner (mit Jahresauswahl oben)
+ * - Header-Farbe = Abteilungsfarbe
  */
 
 class DetailDialog extends DialogBase {
@@ -33,23 +34,17 @@ async zeigeDetails(mitarbeiterId, jahr = null, herkunft = 'urlaubsplaner') {
     const ueberstundenDetails = await this.dataManager.getUeberstundenDetails(mitarbeiterId, jahr);
     const anzahlNachTyp = this._zaehleEintraegeNachTyp(alleEintraegeSortiert);
 
+    // ABTEILUNGSFARBE
+    const abteilungsFarbe = ma.abteilung_farbe || '#1f538d';
+
     const modalHtml = `
       <div class="modal fade" id="detailModal" tabindex="-1">
         <div class="modal-dialog modal-fullscreen">
           <div class="modal-content">
-            <div class="modal-header bg-primary text-white">
+            <div class="modal-header text-white" style="background-color: ${abteilungsFarbe}">
               <h5 class="modal-title">
                 <i class="bi bi-person-circle"></i> ${ma.vorname} ${ma.nachname}
               </h5>
-               <div class="d-flex align-items-center gap-3 ms-auto me-3">
-                <button class="btn btn-outline-light btn-sm" id="btnVorigesJahr" title="Voriges Jahr">
-                  <i class="bi bi-chevron-left"></i>
-                </button>
-                <span class="fw-bold" style="min-width: 80px; text-align: center;">${jahr}</span>
-                <button class="btn btn-outline-light btn-sm" id="btnNaechstesJahr" title="Nächstes Jahr">
-                  <i class="bi bi-chevron-right"></i>
-                </button>
-              </div>
               <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             
@@ -62,7 +57,7 @@ async zeigeDetails(mitarbeiterId, jahr = null, herkunft = 'urlaubsplaner') {
               </li>
               <li class="nav-item" role="presentation">
                 <button class="nav-link ${herkunft === 'urlaubsplaner' ? 'active' : ''}" id="urlaub-tab" data-bs-toggle="tab" data-bs-target="#urlaub" type="button" role="tab">
-                  <i class="bi bi-calendar-check"></i> Urlaubsplaner ${jahr}
+                  <i class="bi bi-calendar-check"></i> Urlaubsplaner
                 </button>
               </li>
             </ul>
@@ -202,7 +197,18 @@ async zeigeDetails(mitarbeiterId, jahr = null, herkunft = 'urlaubsplaner') {
 
                 <!-- TAB 2: URLAUB & ABWESENHEIT -->
                 <div class="tab-pane fade ${herkunft === 'urlaubsplaner' ? 'show active' : ''}" id="urlaub" role="tabpanel">
-                  <div class="row g-0" style="height: calc(100vh - 180px);">
+                  <!-- JAHRESAUSWAHL OBEN -->
+                  <div class="d-flex align-items-center justify-content-center gap-3 p-3 bg-dark border-bottom">
+                    <button class="btn btn-outline-light btn-sm" id="btnVorigesJahr" title="Voriges Jahr">
+                      <i class="bi bi-chevron-left"></i>
+                    </button>
+                    <h5 class="mb-0 fw-bold" style="min-width: 100px; text-align: center;">${jahr}</h5>
+                    <button class="btn btn-outline-light btn-sm" id="btnNaechstesJahr" title="Nächstes Jahr">
+                      <i class="bi bi-chevron-right"></i>
+                    </button>
+                  </div>
+
+                  <div class="row g-0" style="height: calc(100vh - 260px);">
                     
                     <!-- LINKE SPALTE: Urlaub & Überstunden -->
                     <div class="col-md-4 border-end" style="overflow-y: auto; background-color: #1a1a1a;">
@@ -437,6 +443,7 @@ async zeigeDetails(mitarbeiterId, jahr = null, herkunft = 'urlaubsplaner') {
       }, { once: true });
     });
   }
+
 
   /**
    * NEU: Initialisiert Jahr-Navigation Buttons

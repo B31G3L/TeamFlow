@@ -3,8 +3,8 @@
  * Zeigt Mitarbeiter übersichtlich gruppiert nach Abteilungen
  * 
  * UPDATE:
- * - Grüner "Mitarbeiter anlegen" Button entfernt
- * - Detail-Dialog beim Klick auf Namen oder Info-Button
+ * - Detail-Dialog beim Klick auf Namen
+ * - Buttons entfernt, Wochenstunden-Badge hinzugefügt
  */
 
 class StammdatenAnsicht {
@@ -145,7 +145,7 @@ class StammdatenAnsicht {
 
   /**
    * Rendert eine Mitarbeiter-Karte
-   * UPDATE: Namen und Info-Button öffnen Detail-Dialog
+   * UPDATE: Buttons entfernt, Wochenstunden-Badge hinzugefügt
    */
   _renderMitarbeiterKarte(stat) {
     const ma = stat.mitarbeiter;
@@ -166,13 +166,10 @@ class StammdatenAnsicht {
                 ${istAusgetreten ? `<br><i class="bi bi-box-arrow-right"></i> Ausgetreten: ${formatDatumAnzeige(ma.austrittsdatum)}` : ''}
               </div>
             </div>
-            <div class="btn-group btn-group-sm">
-              <button class="btn btn-outline-primary" data-action="bearbeiten" data-id="${ma.id}" title="Bearbeiten">
-                <i class="bi bi-pencil"></i>
-              </button>
-              <button class="btn btn-outline-info" data-action="details" data-id="${ma.id}" title="Details">
-                <i class="bi bi-info-circle"></i>
-              </button>
+            <div class="text-end">
+              <div class="badge bg-secondary" style="font-size: 0.9rem; padding: 0.5rem 0.75rem;">
+                <i class="bi bi-clock-history"></i> ${ma.wochenstunden || 40}h/Woche
+              </div>
             </div>
           </div>
         </div>
@@ -257,12 +254,6 @@ class StammdatenAnsicht {
           await this.zeigen(); // Reload nach Dialog
           break;
 
-        case 'bearbeiten':
-          await this.dialogManager.zeigeStammdatenBearbeiten(id, async () => {
-            await this.zeigen();
-          });
-          break;
-
         case 'urlaub':
           await this.dialogManager.zeigeUrlaubDialog(id, async () => {
             await this.zeigen();
@@ -286,8 +277,6 @@ class StammdatenAnsicht {
             await this.zeigen();
           });
           break;
-
-        
       }
     });
   }
