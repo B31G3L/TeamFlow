@@ -14,12 +14,15 @@ class DetailDialog extends DialogBase {
     super(dataManager);
     this.filterTyp = 'alle';
     this.sortierung = 'desc';
+    this.herkunft = 'urlaubsplaner'; 
   }
 
   /**
    * Zeigt Detail-Dialog für einen Mitarbeiter
    */
 async zeigeDetails(mitarbeiterId, jahr = null, herkunft = 'urlaubsplaner') {
+     this.herkunft = herkunft;
+
       jahr = jahr || this.dataManager.aktuellesJahr;
     
     const stat = await this.dataManager.getMitarbeiterStatistik(mitarbeiterId);
@@ -49,18 +52,30 @@ async zeigeDetails(mitarbeiterId, jahr = null, herkunft = 'urlaubsplaner') {
             </div>
             
            <!-- TAB NAVIGATION -->
-            <ul class="nav nav-tabs bg-dark px-3" id="detailTabs" role="tablist">
-              <li class="nav-item" role="presentation">
-                <button class="nav-link ${herkunft === 'stammdaten' ? 'active' : ''}" id="stammdaten-tab" data-bs-toggle="tab" data-bs-target="#stammdaten" type="button" role="tab">
-                  <i class="bi bi-person-badge"></i> Stammdaten
-                </button>
-              </li>
-              <li class="nav-item" role="presentation">
-                <button class="nav-link ${herkunft === 'urlaubsplaner' ? 'active' : ''}" id="urlaub-tab" data-bs-toggle="tab" data-bs-target="#urlaub" type="button" role="tab">
-                  <i class="bi bi-calendar-check"></i> Urlaubsplaner
-                </button>
-              </li>
-            </ul>
+<ul class="nav nav-tabs bg-dark px-3" id="detailTabs" role="tablist">
+  <li class="nav-item" role="presentation">
+    <button class="nav-link ${herkunft === 'stammdaten' ? 'active' : ''}" 
+            id="stammdaten-tab" 
+            data-bs-toggle="tab" 
+            data-bs-target="#stammdaten" 
+            type="button" 
+            role="tab" 
+            aria-selected="${herkunft === 'stammdaten' ? 'true' : 'false'}">
+      <i class="bi bi-person-badge"></i> Stammdaten
+    </button>
+  </li>
+  <li class="nav-item" role="presentation">
+    <button class="nav-link ${herkunft === 'urlaubsplaner' ? 'active' : ''}" 
+            id="urlaub-tab" 
+            data-bs-toggle="tab" 
+            data-bs-target="#urlaub" 
+            type="button" 
+            role="tab" 
+            aria-selected="${herkunft === 'urlaubsplaner' ? 'true' : 'false'}">
+      <i class="bi bi-calendar-check"></i> Urlaubsplaner
+    </button>
+  </li>
+</ul>
 
             <div class="modal-body p-0">
               <div class="tab-content" id="detailTabContent">

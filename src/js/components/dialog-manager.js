@@ -100,9 +100,9 @@ class DialogManager {
 
   // === Detail-Dialog ===
   
-  async zeigeDetails(mitarbeiterId, jahr = null) {
-    return this.detailDialog.zeigeDetails(mitarbeiterId, jahr);
-  }
+ async zeigeDetails(mitarbeiterId, jahr = null, herkunft = null) {
+  return this.detailDialog.zeigeDetails(mitarbeiterId, jahr, herkunft);
+}
 
   // === Übertrag-Dialog ===
   
