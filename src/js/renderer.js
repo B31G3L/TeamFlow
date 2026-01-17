@@ -478,49 +478,74 @@ async function loadData() {
 // Excel-Export
 async function exportToExcel() {
   try {
-    console.log("Test")
-     showNotification('Export', 'Excel-Export wird erstellt...', 'info');
-     const stats = await dataManager.getAlleStatistiken();
+    showNotification('Export', 'Excel-Export wird erstellt...', 'info');
+    const stats = await dataManager.getAlleStatistiken();
 
     if (stats.length === 0) {
       showNotification('Info', 'Keine Daten zum Exportieren vorhanden', 'warning');
       return;
     }
+    
     const exportData = stats.map(stat => ({
-      vorname: stat.mitarbeiter.vorname,
-      nachname: stat.mitarbeiter.nachname,
+      mitarbeiter: `${stat.mitarbeiter.vorname} ${stat.mitarbeiter.nachname}`,
       abteilung: stat.mitarbeiter.abteilung_name,
       urlaub_anspruch: stat.urlaubsanspruch,
       urlaub_uebertrag: stat.uebertrag_vorjahr,
+      urlaub_verfuegbar: stat.urlaub_verfuegbar,
       urlaub_genommen: stat.urlaub_genommen,
+      urlaub_rest: stat.urlaub_rest,
       krankheit: stat.krankheitstage,
       schulung: stat.schulungstage,
       ueberstunden: stat.ueberstunden
     }));
-    const result = await window.api.exportExcel(exportData);
+    
+    const result = await window.electronAPI.exportExcel(exportData);
     
     if (result.success) {
-      alert('✅ Excel erfolgreich erstellt!\nDer Export-Ordner wurde geöffnet.');
+      showNotification('Erfolg', `Excel wurde erstellt: ${result.path}`, 'success');
     } else {
-      alert(`❌ Fehler: ${result.error}`);
+      showNotification('Fehler', `Export fehlgeschlagen: ${result.error}`, 'danger');
     }
   } catch (error) {
-    alert(`❌ Export fehlgeschlagen: ${error.message}`);
+    console.error('Excel-Export Fehler:', error);
+    showNotification('Fehler', `Export fehlgeschlagen: ${error.message}`, 'danger');
   }
 }
 
 // PDF-Export
-async function exportToPdf(urlaubsData) {
+async function exportToPdf() {
   try {
-    const result = await window.api.exportPdf(urlaubsData);
+    showNotification('Export', 'PDF-Export wird erstellt...', 'info');
+    const stats = await dataManager.getAlleStatistiken();
+
+    if (stats.length === 0) {
+      showNotification('Info', 'Keine Daten zum Exportieren vorhanden', 'warning');
+      return;
+    }
+    
+    const exportData = stats.map(stat => ({
+      mitarbeiter: `${stat.mitarbeiter.vorname} ${stat.mitarbeiter.nachname}`,
+      abteilung: stat.mitarbeiter.abteilung_name,
+      urlaub_anspruch: stat.urlaubsanspruch,
+      urlaub_uebertrag: stat.uebertrag_vorjahr,
+      urlaub_verfuegbar: stat.urlaub_verfuegbar,
+      urlaub_genommen: stat.urlaub_genommen,
+      urlaub_rest: stat.urlaub_rest,
+      krankheit: stat.krankheitstage,
+      schulung: stat.schulungstage,
+      ueberstunden: stat.ueberstunden
+    }));
+    
+    const result = await window.electronAPI.exportPdf(exportData);
     
     if (result.success) {
-      alert('✅ PDF erfolgreich erstellt!\nDer Export-Ordner wurde geöffnet.');
+      showNotification('Erfolg', `PDF wurde erstellt: ${result.path}`, 'success');
     } else {
-      alert(`❌ Fehler: ${result.error}`);
+      showNotification('Fehler', `Export fehlgeschlagen: ${result.error}`, 'danger');
     }
   } catch (error) {
-    alert(`❌ Export fehlgeschlagen: ${error.message}`);
+    console.error('PDF-Export Fehler:', error);
+    showNotification('Fehler', `Export fehlgeschlagen: ${error.message}`, 'danger');
   }
 }
 /**
