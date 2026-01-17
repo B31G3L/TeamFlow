@@ -75,6 +75,7 @@ def create_employee_detail_pdf(employee_data, vacation_data, absence_data, outpu
     # Mitarbeiter-Informationen
     info_text = f"""
     <b>Abteilung:</b> {employee_data.get('department', 'Keine Abteilung')}<br/>
+    <b>Jahr:</b> {employee_data.get('year', datetime.now().year)}<br/>
     <b>Urlaubsanspruch:</b> {employee_data.get('entitlement', 0)} Tage<br/>
     <b>Übertrag:</b> {employee_data.get('carryover', 0)} Tage<br/>
     <b>Verfügbar:</b> {employee_data.get('available', 0)} Tage<br/>
@@ -91,49 +92,40 @@ def create_employee_detail_pdf(employee_data, vacation_data, absence_data, outpu
         elements.append(vacation_title)
         
         # Tabellen-Header
-        vacation_table_data = [['Von', 'Bis', 'Tage', 'Status', 'Notiz']]
+        vacation_table_data = [['Von', 'Bis', 'Tage', 'Notiz']]
         
         # Sortiere nach Startdatum (neueste zuerst)
-        sorted_vacation = sorted(vacation_data, key=lambda x: x.get('startDate', ''), reverse=True)
+        sorted_vacation = sorted(vacation_data, key=lambda x: x.get('von', ''), reverse=True)
         
         for entry in sorted_vacation:
-            start = entry.get('startDate', '')
-            end = entry.get('endDate', '')
-            days = entry.get('days', 0)
-            status = entry.get('status', 'Unbekannt')
-            note = entry.get('note', '')
+            von = entry.get('von', '')
+            bis = entry.get('bis', '')
+            tage = entry.get('tage', 0)
+            notiz = entry.get('notiz', '')
             
             # Formatiere Datum
             try:
-                start_formatted = datetime.strptime(start, '%Y-%m-%d').strftime('%d.%m.%Y')
+                von_formatted = datetime.strptime(von, '%Y-%m-%d').strftime('%d.%m.%Y')
             except:
-                start_formatted = start
+                von_formatted = von
             
             try:
-                end_formatted = datetime.strptime(end, '%Y-%m-%d').strftime('%d.%m.%Y')
+                bis_formatted = datetime.strptime(bis, '%Y-%m-%d').strftime('%d.%m.%Y')
             except:
-                end_formatted = end
-            
-            # Status auf Deutsch
-            status_de = {
-                'approved': 'Genehmigt',
-                'pending': 'Ausstehend',
-                'rejected': 'Abgelehnt'
-            }.get(status, status)
+                bis_formatted = bis
             
             vacation_table_data.append([
-                start_formatted,
-                end_formatted,
-                str(days),
-                status_de,
-                note[:30] + '...' if len(note) > 30 else note
+                von_formatted,
+                bis_formatted,
+                str(tage),
+                notiz[:40] + '...' if len(notiz) > 40 else notiz
             ])
         
         # Erstelle Tabelle
-        vacation_table = Table(vacation_table_data, colWidths=[3*cm, 3*cm, 2*cm, 3*cm, 6*cm])
+        vacation_table = Table(vacation_table_data, colWidths=[3*cm, 3*cm, 2*cm, 9*cm])
         vacation_table.setStyle(TableStyle([
             # Header
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1F538D')),
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#28a745')),
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
             ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
@@ -144,8 +136,8 @@ def create_employee_detail_pdf(employee_data, vacation_data, absence_data, outpu
             # Daten
             ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
             ('FONTSIZE', (0, 1), (-1, -1), 9),
-            ('ALIGN', (0, 1), (2, -1), 'CENTER'),  # Von, Bis, Tage zentriert
-            ('ALIGN', (3, 1), (-1, -1), 'LEFT'),    # Status, Notiz links
+            ('ALIGN', (0, 1), (2, -1), 'CENTER'),
+            ('ALIGN', (3, 1), (-1, -1), 'LEFT'),
             ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
             ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.lightgrey]),
@@ -160,45 +152,52 @@ def create_employee_detail_pdf(employee_data, vacation_data, absence_data, outpu
         elements.append(no_vacation)
         elements.append(Spacer(1, 0.5*cm))
     
-    # Abwesenheitseinträge (Krankheit, Schulung, etc.)
+    # Abwesenheitseinträge (Krankheit, Schulung, Überstunden)
     if absence_data and len(absence_data) > 0:
-        absence_title = Paragraph("Abwesenheitseinträge", subtitle_style)
+        absence_title = Paragraph("Weitere Abwesenheiten", subtitle_style)
         elements.append(absence_title)
         
         # Tabellen-Header
-        absence_table_data = [['Datum', 'Typ', 'Tage', 'Notiz']]
+        absence_table_data = [['Typ', 'Datum', 'Wert', 'Notiz']]
         
         # Sortiere nach Datum (neueste zuerst)
-        sorted_absence = sorted(absence_data, key=lambda x: x.get('date', ''), reverse=True)
+        sorted_absence = sorted(absence_data, key=lambda x: x.get('datum', ''), reverse=True)
         
         for entry in sorted_absence:
-            date = entry.get('date', '')
-            typ = entry.get('type', '')
-            days = entry.get('days', 0)
-            note = entry.get('note', '')
+            typ = entry.get('typ', '')
+            datum = entry.get('datum', '')
+            wert = entry.get('wert', 0)
+            notiz = entry.get('notiz', '')
             
             # Formatiere Datum
             try:
-                date_formatted = datetime.strptime(date, '%Y-%m-%d').strftime('%d.%m.%Y')
+                datum_formatted = datetime.strptime(datum, '%Y-%m-%d').strftime('%d.%m.%Y')
             except:
-                date_formatted = date
+                datum_formatted = datum
             
             # Typ auf Deutsch
-            type_de = {
-                'sick': 'Krankheit',
-                'training': 'Schulung',
-                'other': 'Sonstiges'
-            }.get(typ, typ)
+            typ_labels = {
+                'krankheit': 'Krankheit',
+                'schulung': 'Schulung',
+                'ueberstunden': 'Überstunden'
+            }
+            typ_de = typ_labels.get(typ, typ)
+            
+            # Wert formatieren (mit Einheit)
+            if typ == 'ueberstunden':
+                wert_str = f"{wert:+.1f}h"
+            else:
+                wert_str = f"{wert} Tage"
             
             absence_table_data.append([
-                date_formatted,
-                type_de,
-                str(days),
-                note[:40] + '...' if len(note) > 40 else note
+                typ_de,
+                datum_formatted,
+                wert_str,
+                notiz[:40] + '...' if len(notiz) > 40 else notiz
             ])
         
         # Erstelle Tabelle
-        absence_table = Table(absence_table_data, colWidths=[3*cm, 3*cm, 2*cm, 9*cm])
+        absence_table = Table(absence_table_data, colWidths=[3*cm, 3*cm, 2.5*cm, 8.5*cm])
         absence_table.setStyle(TableStyle([
             # Header
             ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1F538D')),
@@ -212,8 +211,8 @@ def create_employee_detail_pdf(employee_data, vacation_data, absence_data, outpu
             # Daten
             ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
             ('FONTSIZE', (0, 1), (-1, -1), 9),
-            ('ALIGN', (0, 1), (2, -1), 'CENTER'),  # Datum, Typ, Tage zentriert
-            ('ALIGN', (3, 1), (-1, -1), 'LEFT'),    # Notiz links
+            ('ALIGN', (0, 1), (2, -1), 'CENTER'),
+            ('ALIGN', (3, 1), (-1, -1), 'LEFT'),
             ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
             ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.lightgrey]),
@@ -223,7 +222,7 @@ def create_employee_detail_pdf(employee_data, vacation_data, absence_data, outpu
         
         elements.append(absence_table)
     else:
-        no_absence = Paragraph("Keine Abwesenheitseinträge vorhanden", info_style)
+        no_absence = Paragraph("Keine weiteren Abwesenheiten vorhanden", info_style)
         elements.append(no_absence)
     
     # Fußzeile mit Datum
@@ -250,7 +249,7 @@ def main():
     try:
         with open(input_file, 'r', encoding='utf-8') as f:
             data = json.load(f)
-        sys.stdout.buffer.write(f"JSON gelesen: Mitarbeiter {data.get('employee', {}).get('name', 'Unbekannt')}\n".encode('utf-8'))
+        sys.stdout.buffer.write(f"JSON gelesen\n".encode('utf-8'))
     except Exception as e:
         sys.stderr.buffer.write(f"FEHLER beim Lesen der JSON: {str(e)}\n".encode('utf-8'))
         sys.exit(1)

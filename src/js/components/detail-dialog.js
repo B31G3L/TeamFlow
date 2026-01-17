@@ -16,7 +16,109 @@ class DetailDialog extends DialogBase {
     this.sortierung = 'desc';
     this.herkunft = 'urlaubsplaner'; 
   }
+async _exportMitarbeiterPDF(mitarbeiterId, jahr) {
+  try {
+    // 1. Mitarbeiterdaten laden
+    const mitarbeiter = await window.api.invoke('db:getMitarbeiterById', mitarbeiterId);
+    if (!mitarbeiter) {
+      showNotification('Fehler', 'Mitarbeiter nicht gefunden', 'error');
+      return;
+    }
 
+    // 2. Urlaubsdaten für das Jahr laden
+    const urlaubsdaten = await window.api.invoke('db:getUrlaubByMitarbeiterAndYear', {
+      mitarbeiterId,
+      jahr
+    });
+
+    // 3. Abwesenheitsdaten laden (Krankheit, Schulung, Überstunden)
+    const krankheitsdaten = await window.api.invoke('db:getKrankheitByMitarbeiterAndYear', {
+      mitarbeiterId,
+      jahr
+    });
+    
+    const schulungsdaten = await window.api.invoke('db:getSchulungByMitarbeiterAndYear', {
+      mitarbeiterId,
+      jahr
+    });
+    
+    const ueberstundendaten = await window.api.invoke('db:getUeberstundenByMitarbeiterAndYear', {
+      mitarbeiterId,
+      jahr
+    });
+
+    // 4. Berechne Urlaubsstatistiken
+    const anspruch = mitarbeiter.urlaubstage || 0;
+    const uebertrag = await window.api.invoke('db:getUebertragForYear', {
+      mitarbeiterId,
+      jahr
+    });
+    
+    let genommen = 0;
+    if (urlaubsdaten && urlaubsdaten.length > 0) {
+      genommen = urlaubsdaten.reduce((sum, entry) => sum + (entry.tage || 0), 0);
+    }
+    
+    const verfuegbar = anspruch + (uebertrag || 0);
+    const verbleibend = verfuegbar - genommen;
+
+    // 5. Formatiere Daten für PDF-Export
+    const exportData = {
+      employee: {
+        name: mitarbeiter.name,
+        department: mitarbeiter.abteilung || 'Keine Abteilung',
+        year: jahr,
+        entitlement: anspruch,
+        carryover: uebertrag || 0,
+        available: verfuegbar,
+        taken: genommen,
+        remaining: verbleibend
+      },
+      vacation: (urlaubsdaten || []).map(entry => ({
+        von: entry.von_datum,
+        bis: entry.bis_datum,
+        tage: entry.tage,
+        notiz: entry.notiz || ''
+      })),
+      absence: [
+        // Krankheitstage
+        ...(krankheitsdaten || []).map(entry => ({
+          typ: 'krankheit',
+          datum: entry.datum,
+          wert: entry.tage,
+          notiz: entry.notiz || ''
+        })),
+        // Schulungstage
+        ...(schulungsdaten || []).map(entry => ({
+          typ: 'schulung',
+          datum: entry.datum,
+          wert: entry.tage,
+          notiz: entry.notiz || ''
+        })),
+        // Überstunden
+        ...(ueberstundendaten || []).map(entry => ({
+          typ: 'ueberstunden',
+          datum: entry.datum,
+          wert: entry.stunden,
+          notiz: entry.notiz || ''
+        }))
+      ]
+    };
+
+    // 6. IPC-Call zum Backend
+    const result = await window.api.invoke('export:employeeDetailPdf', exportData);
+    
+    if (result.success) {
+      showNotification('Erfolg', `PDF erfolgreich erstellt: ${mitarbeiter.name}`, 'success');
+    } else {
+      showNotification('Fehler', `PDF-Export fehlgeschlagen: ${result.error}`, 'error');
+    }
+
+  } catch (error) {
+    console.error('Fehler beim PDF-Export:', error);
+    showNotification('Fehler', 'PDF-Export fehlgeschlagen', 'error');
+  }
+}
   /**
    * Zeigt Detail-Dialog für einen Mitarbeiter
    */
@@ -92,19 +194,11 @@ async zeigeDetails(mitarbeiterId, jahr = null, herkunft = 'urlaubsplaner') {
                               <button class="btn btn-outline-primary w-100" id="btnMitarbeiterBearbeiten">
                                 <i class="bi bi-pencil"></i> Bearbeiten
                               </button>
-                              <div class="btn-group">
-                                <button type="button" class="btn btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown">
-                                  <i class="bi bi-download"></i>
-                                </button>
-                                <ul class="dropdown-menu">
-                                  <li><a class="dropdown-item" href="#" id="btnExportExcel">
-                                    <i class="bi bi-file-earmark-excel text-success"></i> Excel
-                                  </a></li>
-                                  <li><a class="dropdown-item" href="#" id="btnExportPDF">
-                                    <i class="bi bi-file-earmark-pdf text-danger"></i> PDF
-                                  </a></li>
-                                </ul>
-                              </div>
+                              <div class="export-buttons">
+  <button id="btnExportStammdatenPDF" class="btn btn-sm btn-outline-primary">
+    <i class="fas fa-file-pdf"></i> Als PDF exportieren
+  </button>
+</div>
                             </div>
 
                             <!-- Persönliche Daten -->
@@ -228,7 +322,11 @@ async zeigeDetails(mitarbeiterId, jahr = null, herkunft = 'urlaubsplaner') {
                     <!-- LINKE SPALTE: Urlaub & Überstunden -->
                     <div class="col-md-4 border-end" style="overflow-y: auto; background-color: #1a1a1a;">
                       <div class="p-3">
-                        
+                        <div class="export-buttons">
+  <button id="btnExportPDF" class="btn btn-sm btn-outline-primary">
+    <i class="fas fa-file-pdf"></i> Als PDF exportieren
+  </button>
+</div>
                         <!-- Urlaub ${jahr} -->
                         <div class="card bg-dark mb-3">
                           <div class="card-header clickable" id="clickUrlaub" style="cursor: pointer;" title="Klicken um Urlaub einzutragen">
@@ -590,22 +688,20 @@ async zeigeDetails(mitarbeiterId, jahr = null, herkunft = 'urlaubsplaner') {
       });
     }
 
-    // Export-Buttons
-    const btnExportExcel = modalElement.querySelector('#btnExportExcel');
-    if (btnExportExcel) {
-      btnExportExcel.addEventListener('click', async (e) => {
-        e.preventDefault();
-        showNotification('Info', 'Excel-Export in Entwicklung', 'info');
-      });
-    }
-
-    const btnExportPDF = modalElement.querySelector('#btnExportPDF');
-    if (btnExportPDF) {
-      btnExportPDF.addEventListener('click', async (e) => {
-        e.preventDefault();
-        showNotification('Info', 'PDF-Export in Entwicklung', 'info');
-      });
-    }
+    const btnExportStammdatenPDF = modalElement.querySelector('#btnExportStammdatenPDF');
+if (btnExportStammdatenPDF) {
+  btnExportStammdatenPDF.addEventListener('click', async (e) => {
+    e.preventDefault();
+    await this._exportMitarbeiterPDF(mitarbeiterId, jahr);
+  });
+}
+const btnExportPDF = modalElement.querySelector('#btnExportPDF');
+if (btnExportPDF) {
+  btnExportPDF.addEventListener('click', async (e) => {
+    e.preventDefault();
+    await this._exportMitarbeiterPDF(mitarbeiterId, jahr);
+  });
+}
   }
 
   /**
