@@ -48,7 +48,7 @@ class KalenderAnsicht {
       SELECT datum, name FROM feiertage 
       WHERE strftime('%Y', datum) = ?
     `, [jahrStr]);
-    
+
     this.feiertage.clear();
     if (feiertageResult.success && feiertageResult.data) {
       feiertageResult.data.forEach(f => {
@@ -62,7 +62,7 @@ class KalenderAnsicht {
       WHERE strftime('%Y', von_datum) = ? OR strftime('%Y', bis_datum) = ?
       ORDER BY von_datum
     `, [jahrStr, jahrStr]);
-    
+
     this.veranstaltungen = veranstaltungenResult.success ? veranstaltungenResult.data : [];
 
     // Lade Abwesenheiten
@@ -75,7 +75,7 @@ class KalenderAnsicht {
   async ladeAbwesenheiten() {
     const startDatum = new Date(this.currentYear, this.currentMonth, 1);
     const endDatum = new Date(this.currentYear, this.currentMonth + 1, 0);
-    
+
     const startStr = startDatum.toISOString().split('T')[0];
     const endStr = endDatum.toISOString().split('T')[0];
 
@@ -88,18 +88,18 @@ class KalenderAnsicht {
       LEFT JOIN abteilungen a ON m.abteilung_id = a.id
       WHERE m.status = 'AKTIV'
     `;
-    
+
     if (this.selectedAbteilung) {
       mitarbeiterQuery += ` AND a.name = ?`;
     }
-    
+
     mitarbeiterQuery += ` ORDER BY a.name, m.nachname, m.vorname`;
 
     const mitarbeiterResult = await this.dataManager.db.query(
-      mitarbeiterQuery, 
+      mitarbeiterQuery,
       this.selectedAbteilung ? [this.selectedAbteilung] : []
     );
-    
+
     const mitarbeiter = mitarbeiterResult.success ? mitarbeiterResult.data : [];
 
     for (const ma of mitarbeiter) {
@@ -163,7 +163,7 @@ class KalenderAnsicht {
         schulungResult.data.forEach(s => {
           const bisDatum = new Date(s.datum);
           bisDatum.setDate(bisDatum.getDate() + Math.floor(s.dauer_tage) - 1);
-          
+
           this.abwesenheiten.push({
             mitarbeiter: ma,
             typ: 'schulung',
@@ -433,10 +433,212 @@ class KalenderAnsicht {
           flex: 1;
           overflow: auto;
         }
+
+        /* Tooltip Styles */
+.kalender-tooltip {
+  position: fixed;
+  z-index: 10000;
+  background: #2d2d2d;
+  border: 1px solid #495057;
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  min-width: 280px;
+  max-width: 400px;
+  animation: tooltipFadeIn 0.2s ease;
+}
+
+@keyframes tooltipFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.kalender-tooltip .tooltip-header {
+  padding: 0.75rem 1rem;
+  color: white;
+  font-weight: 600;
+  border-radius: 8px 8px 0 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.kalender-tooltip .tooltip-body {
+  padding: 1rem;
+}
+
+.kalender-tooltip .tooltip-row {
+  padding: 0.25rem 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #e0e0e0;
+  font-size: 0.85rem;
+}
+
+.kalender-tooltip .tooltip-row i {
+  color: #6c757d;
+  width: 16px;
+}
+
+/* Scrollbare Tageszellen */
+.kalender-tag {
+  overflow-y: auto;
+  overflow-x: hidden;
+  max-height: 150px; /* Anpassbar je nach Bedarf */
+}
+
+.kalender-tag::-webkit-scrollbar {
+  width: 4px;
+}
+
+.kalender-tag::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.kalender-tag::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 2px;
+}
+
+.kalender-tag::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+/* Mehr-Button besser sichtbar */
+.mehr-eintraege {
+  background-color: rgba(255, 255, 255, 0.1);
+  padding: 2px 4px;
+  border-radius: 3px;
+  margin-top: 2px;
+  transition: all 0.2s ease;
+}
+
+.mehr-eintraege:hover {
+  background-color: rgba(255, 255, 255, 0.2);
+  color: #fff !important;
+}
+
+/* Abwesenheit-Eintrag klickbar machen */
+.abwesenheit-eintrag {
+  position: relative;
+}
+
+.abwesenheit-eintrag::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(255, 255, 255, 0.1);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  pointer-events: none;
+}
+
+.abwesenheit-eintrag:hover::after {
+  opacity: 1;
+}
       </style>
     `;
   }
+  // Nach Zeile 113 (nach dem Erstellen des HTML) diese Methode hinzufügen:
 
+  /**
+   * Zeigt Tooltip mit Eintrag-Details
+   */
+  _zeigeEintragTooltip(eintrag, element) {
+    // Entferne alte Tooltips
+    document.querySelectorAll('.kalender-tooltip').forEach(t => t.remove());
+
+    const tooltip = document.createElement('div');
+    tooltip.className = 'kalender-tooltip';
+
+    let inhalt = `
+    <div class="tooltip-header" style="background-color: ${eintrag.farbe}">
+      <i class="bi bi-${eintrag.icon}"></i>
+      ${this._getTypLabel(eintrag.typ)}
+    </div>
+    <div class="tooltip-body">
+      <div class="tooltip-row">
+        <strong>${eintrag.mitarbeiter.vorname} ${eintrag.mitarbeiter.nachname}</strong>
+      </div>
+      <div class="tooltip-row">
+        <span class="abteilung-badge" style="background-color: ${eintrag.mitarbeiter.abteilung_farbe}">
+          ${eintrag.mitarbeiter.abteilung_name}
+        </span>
+      </div>
+      <div class="tooltip-row">
+        <i class="bi bi-calendar"></i>
+        ${formatDatumAnzeige(eintrag.von)} - ${formatDatumAnzeige(eintrag.bis)}
+      </div>
+      <div class="tooltip-row">
+        <i class="bi bi-hourglass"></i>
+        ${formatZahl(eintrag.tage)} ${eintrag.typ === 'ueberstunden' ? 'Stunden' : 'Tage'}
+      </div>
+  `;
+
+    if (eintrag.titel) {
+      inhalt += `
+      <div class="tooltip-row">
+        <i class="bi bi-tag"></i>
+        ${eintrag.titel}
+      </div>
+    `;
+    }
+
+    if (eintrag.notiz) {
+      inhalt += `
+      <div class="tooltip-row">
+        <i class="bi bi-sticky"></i>
+        ${eintrag.notiz}
+      </div>
+    `;
+    }
+
+    inhalt += `</div>`;
+    tooltip.innerHTML = inhalt;
+
+    document.body.appendChild(tooltip);
+
+    // Position berechnen
+    const rect = element.getBoundingClientRect();
+    const tooltipRect = tooltip.getBoundingClientRect();
+
+    let left = rect.left + rect.width / 2 - tooltipRect.width / 2;
+    let top = rect.bottom + 10;
+
+    // Overflow rechts verhindern
+    if (left + tooltipRect.width > window.innerWidth - 10) {
+      left = window.innerWidth - tooltipRect.width - 10;
+    }
+
+    // Overflow links verhindern
+    if (left < 10) {
+      left = 10;
+    }
+
+    // Overflow unten verhindern (zeige über dem Element)
+    if (top + tooltipRect.height > window.innerHeight - 10) {
+      top = rect.top - tooltipRect.height - 10;
+    }
+
+    tooltip.style.left = left + 'px';
+    tooltip.style.top = top + 'px';
+
+    // Schließen bei Klick außerhalb
+    setTimeout(() => {
+      document.addEventListener('click', function closeTooltip(e) {
+        if (!tooltip.contains(e.target) && !element.contains(e.target)) {
+          tooltip.remove();
+          document.removeEventListener('click', closeTooltip);
+        }
+      });
+    }, 100);
+  }
   /**
    * Initialisiert Event-Listener
    */
@@ -449,7 +651,7 @@ class KalenderAnsicht {
     // Abteilungs-Filter füllen
     const abteilungen = await this.dataManager.getAlleAbteilungen();
     const abteilungFilter = container.querySelector('#kalenderAbteilungFilter');
-    
+
     if (abteilungFilter) {
       abteilungen.forEach(abt => {
         const option = document.createElement('option');
@@ -504,7 +706,7 @@ class KalenderAnsicht {
     // Ansicht wechseln
     const btnMonat = container.querySelector('#btnAnsichtMonat');
     const btnListe = container.querySelector('#btnAnsichtListe');
-    
+
     btnMonat?.addEventListener('click', () => {
       this.ansichtModus = 'monat';
       btnMonat.classList.add('active');
@@ -534,31 +736,118 @@ class KalenderAnsicht {
     }
 
     // Event-Listener für Einträge
-    container.querySelectorAll('.abwesenheit-eintrag').forEach(el => {
-      el.addEventListener('click', (e) => {
+    // ERSETZE die Zeilen 165-174 mit:
+
+    // Event-Listener für Einträge UND "mehr..." Buttons
+    container.addEventListener('click', (e) => {
+      const eintragEl = e.target.closest('.abwesenheit-eintrag');
+      const mehrBtn = e.target.closest('.mehr-eintraege');
+
+      if (eintragEl) {
         e.stopPropagation();
-        const maId = el.dataset.mitarbeiterId;
-        const typ = el.dataset.typ;
-        this._zeigeEintragDetails(maId, typ, el.dataset);
-      });
+        const maId = eintragEl.dataset.mitarbeiterId;
+        const typ = eintragEl.dataset.typ;
+        const von = eintragEl.dataset.von;
+
+        // Finde den passenden Eintrag
+        const eintrag = this.abwesenheiten.find(a =>
+          a.mitarbeiter.id === maId &&
+          a.typ === typ &&
+          a.von === von
+        );
+
+        if (eintrag) {
+          this._zeigeEintragTooltip(eintrag, eintragEl);
+        }
+      } else if (mehrBtn) {
+        e.stopPropagation();
+        this._zeigeAlleTageseintraege(mehrBtn.dataset.datum);
+      }
     });
   }
+  /**
+   * Zeigt alle Einträge eines Tages in einem Modal
+   */
+  _zeigeAlleTageseintraege(datum) {
+    const tagesAbwesenheiten = this._getAbwesenheitenFuerTag(datum);
+    const datumFormatiert = formatDatumAnzeige(datum);
 
+    const modalHtml = `
+    <div class="modal fade" id="tageseintraegeModal" tabindex="-1">
+      <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">
+              <i class="bi bi-calendar-day"></i> Einträge vom ${datumFormatiert}
+            </h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body">
+            <div class="list-group">
+              ${tagesAbwesenheiten.map(a => `
+                <div class="list-group-item list-group-item-action bg-dark">
+                  <div class="d-flex align-items-center gap-3">
+                    <div class="flex-shrink-0">
+                      <span class="badge" style="background-color: ${a.farbe}; padding: 0.5rem;">
+                        <i class="bi bi-${a.icon}"></i>
+                      </span>
+                    </div>
+                    <div class="flex-grow-1">
+                      <h6 class="mb-1">${a.mitarbeiter.vorname} ${a.mitarbeiter.nachname}</h6>
+                      <div>
+                        <span class="abteilung-badge" style="background-color: ${a.mitarbeiter.abteilung_farbe}">
+                          ${a.mitarbeiter.abteilung_name}
+                        </span>
+                        <span class="ms-2 text-muted">${this._getTypLabel(a.typ)}</span>
+                      </div>
+                      ${a.titel ? `<small class="text-info"><i class="bi bi-tag"></i> ${a.titel}</small>` : ''}
+                      ${a.notiz ? `<small class="text-muted d-block mt-1"><i class="bi bi-sticky"></i> ${a.notiz}</small>` : ''}
+                    </div>
+                    <div class="flex-shrink-0 text-end">
+                      <div class="fw-bold">${formatZahl(a.tage)} ${a.typ === 'ueberstunden' ? 'Std.' : 'Tage'}</div>
+                      <small class="text-muted">${formatDatumAnzeige(a.von)} - ${formatDatumAnzeige(a.bis)}</small>
+                    </div>
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Schließen</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+
+    // Modal anzeigen
+    const oldModal = document.querySelector('#tageseintraegeModal');
+    if (oldModal) oldModal.remove();
+
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    const modalElement = document.querySelector('#tageseintraegeModal');
+    const modal = new bootstrap.Modal(modalElement);
+    modal.show();
+
+    modalElement.addEventListener('hidden.bs.modal', () => {
+      modalElement.remove();
+    }, { once: true });
+  }
   /**
    * Erstellt die Monatsansicht HTML
    */
   _erstelleMonatsAnsicht() {
     const wochentage = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
-    
+
     // Erster Tag des Monats
     const ersterTag = new Date(this.currentYear, this.currentMonth, 1);
     // Letzter Tag des Monats
     const letzterTag = new Date(this.currentYear, this.currentMonth + 1, 0);
-    
+
     // Wochentag des ersten Tags (0 = Sonntag, wir wollen Mo = 0)
     let startWochentag = ersterTag.getDay() - 1;
     if (startWochentag < 0) startWochentag = 6;
-    
+
     const heute = new Date();
     const heuteStr = heute.toISOString().split('T')[0];
 
@@ -591,7 +880,7 @@ class KalenderAnsicht {
 
       // Finde Abwesenheiten für diesen Tag
       const tagesAbwesenheiten = this._getAbwesenheitenFuerTag(datumStr);
-      
+
       // Finde Veranstaltungen für diesen Tag
       const tagesVeranstaltungen = this._getVeranstaltungenFuerTag(datumStr);
 
@@ -659,7 +948,7 @@ class KalenderAnsicht {
   _erstelleListenAnsicht() {
     const wochentage = ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag'];
     const letzterTag = new Date(this.currentYear, this.currentMonth + 1, 0).getDate();
-    
+
     const heute = new Date();
     const heuteStr = heute.toISOString().split('T')[0];
 
@@ -753,7 +1042,7 @@ class KalenderAnsicht {
    */
   _getAbwesenheitenFuerTag(datumStr) {
     const datum = new Date(datumStr);
-    
+
     return this.abwesenheiten.filter(a => {
       const von = new Date(a.von);
       const bis = new Date(a.bis);
@@ -766,7 +1055,7 @@ class KalenderAnsicht {
    */
   _getVeranstaltungenFuerTag(datumStr) {
     const datum = new Date(datumStr);
-    
+
     return this.veranstaltungen.filter(v => {
       const von = new Date(v.von_datum);
       const bis = new Date(v.bis_datum);
@@ -803,7 +1092,7 @@ class KalenderAnsicht {
   _zeigeEintragDetails(mitarbeiterId, typ, data) {
     const von = new Date(data.von).toLocaleDateString('de-DE');
     const bis = new Date(data.bis).toLocaleDateString('de-DE');
-    
+
     showNotification(
       `${this._getTypLabel(typ)}`,
       `${von} - ${bis}`,
