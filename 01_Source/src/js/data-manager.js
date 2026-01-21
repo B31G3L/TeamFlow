@@ -630,9 +630,21 @@ class TeamplannerDataManager {
         values.push(daten.austrittsdatum || null);
       }
       if (daten.urlaubstage_jahr !== undefined) {
-        updates.push('urlaubstage_jahr = ?');
-        values.push(daten.urlaubstage_jahr);
-      }
+  updates.push('urlaubstage_jahr = ?');
+  values.push(daten.urlaubstage_jahr);
+}
+if (daten.wochenstunden !== undefined) {
+  updates.push('wochenstunden = ?');
+  values.push(daten.wochenstunden);
+}
+if (daten.adresse !== undefined) {
+  updates.push('adresse = ?');
+  values.push(daten.adresse || null);
+}
+if (daten.gehalt !== undefined) {
+  updates.push('gehalt = ?');
+  values.push(daten.gehalt ? parseFloat(daten.gehalt) : null);
+}
 
       if (updates.length === 0) return true;
 

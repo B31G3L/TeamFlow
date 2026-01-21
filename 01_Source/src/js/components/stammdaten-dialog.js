@@ -305,6 +305,21 @@ class StammdatenDialog extends DialogBase {
                   <input type="date" class="form-control" id="austrittsdatum" value="${mitarbeiter.austrittsdatum || ''}">
                   <small class="form-text text-muted">Optional - leer lassen wenn noch beschäftigt</small>
                 </div>
+
+                <div class="mb-3">
+  <label class="form-label">Adresse</label>
+  <textarea class="form-control" id="adresse" rows="2" placeholder="Straße, Hausnummer, PLZ, Ort">${mitarbeiter.adresse || ''}</textarea>
+  <small class="form-text text-muted">Optionale Adresse des Mitarbeiters</small>
+</div>
+
+<div class="mb-3">
+  <label class="form-label">Gehalt (Brutto/Monat)</label>
+  <div class="input-group">
+    <input type="number" class="form-control" id="gehalt" value="${mitarbeiter.gehalt || ''}" step="0.01" min="0" placeholder="0.00">
+    <span class="input-group-text">€</span>
+  </div>
+  <small class="form-text text-muted">Optionales Bruttogehalt pro Monat</small>
+</div>
               </form>
             </div>
             <div class="modal-footer">

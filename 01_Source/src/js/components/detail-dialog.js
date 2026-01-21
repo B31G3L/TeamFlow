@@ -204,133 +204,164 @@ class DetailDialog extends DialogBase {
             <div class="modal-body p-0">
               <div class="tab-content" id="detailTabContent">
                 
-                <!-- TAB 1: STAMMDATEN -->
-                <div class="tab-pane fade ${herkunft === 'stammdaten' ? 'show active' : ''}" id="stammdaten" role="tabpanel">
-                  <div class="row g-0" style="height: calc(100vh - 180px);">
-                    <div class="col-md-12" style="overflow-y: auto; background-color: #1a1a1a;">
-                      <div class="p-4">
-                        
-                        <div class="row">
-                          <div class="col-md-6">
-                            <!-- Aktionen Card -->
-                            <div class="card bg-dark mb-3">
-                              <div class="card-header">
-                                <h6 class="mb-0"><i class="bi bi-gear"></i> Aktionen</h6>
-                              </div>
-                              <div class="card-body p-3">
-                                <div class="d-grid gap-2">
-                                  <button class="btn btn-primary" id="btnMitarbeiterBearbeiten">
-                                    <i class="bi bi-pencil me-2"></i>Stammdaten bearbeiten
-                                  </button>
-                                  <button class="btn btn-outline-danger" id="btnExportStammdatenPDF">
-                                    <i class="bi bi-file-earmark-pdf me-2"></i>Als PDF exportieren
-                                  </button>
-                                </div>
-                              </div>
-                            </div>
+              <!-- TAB 1: STAMMDATEN -->
+<div class="tab-pane fade ${herkunft === 'stammdaten' ? 'show active' : ''}" id="stammdaten" role="tabpanel">
+  <div class="row g-0" style="height: calc(100vh - 180px);">
+    <div class="col-md-12" style="overflow-y: auto; background-color: #1a1a1a;">
+      <div class="p-4">
+        
+        <div class="row">
+          <div class="col-md-6">
+            <!-- Aktionen Card -->
+            <div class="card bg-dark mb-3">
+              <div class="card-header">
+                <h6 class="mb-0"><i class="bi bi-gear"></i> Aktionen</h6>
+              </div>
+              <div class="card-body p-3">
+                <div class="d-grid gap-2">
+                  <button class="btn btn-primary" id="btnMitarbeiterBearbeiten">
+                    <i class="bi bi-pencil me-2"></i>Stammdaten bearbeiten
+                  </button>
+                  <button class="btn btn-outline-danger" id="btnExportStammdatenPDF">
+                    <i class="bi bi-file-earmark-pdf me-2"></i>Als PDF exportieren
+                  </button>
+                </div>
+              </div>
+            </div>
 
-                            <!-- Persönliche Daten -->
-                            <div class="card bg-dark mb-3">
-                              <div class="card-header">
-                                <h6 class="mb-0"><i class="bi bi-person"></i> Persönliche Daten</h6>
-                              </div>
-                              <div class="card-body">
-                                <table class="table table-sm table-borderless mb-0">
-                                  <tr>
-                                    <td class="text-muted" style="width: 40%;">Vorname:</td>
-                                    <td class="fw-bold">${ma.vorname}</td>
-                                  </tr>
-                                  <tr>
-                                    <td class="text-muted">Nachname:</td>
-                                    <td class="fw-bold">${ma.nachname}</td>
-                                  </tr>
-                                  ${ma.email ? `
-                                  <tr>
-                                    <td class="text-muted">Email:</td>
-                                    <td><small>${ma.email}</small></td>
-                                  </tr>
-                                  ` : ''}
-                                  ${ma.geburtsdatum ? `
-                                  <tr>
-                                    <td class="text-muted">Geburtsdatum:</td>
-                                    <td>${formatDatumAnzeige(ma.geburtsdatum)}</td>
-                                  </tr>
-                                  ` : ''}
-                                </table>
-                              </div>
-                            </div>
+            <!-- Persönliche Daten -->
+            <div class="card bg-dark mb-3">
+              <div class="card-header">
+                <h6 class="mb-0"><i class="bi bi-person"></i> Persönliche Daten</h6>
+              </div>
+              <div class="card-body">
+                <table class="table table-sm table-borderless mb-0">
+                  <tr>
+                    <td class="text-muted" style="width: 40%;">Vorname:</td>
+                    <td class="fw-bold">${ma.vorname}</td>
+                  </tr>
+                  <tr>
+                    <td class="text-muted">Nachname:</td>
+                    <td class="fw-bold">${ma.nachname}</td>
+                  </tr>
+                  ${ma.email ? `
+                  <tr>
+                    <td class="text-muted">Email:</td>
+                    <td><small>${ma.email}</small></td>
+                  </tr>
+                  ` : ''}
+                  ${ma.geburtsdatum ? `
+                  <tr>
+                    <td class="text-muted">Geburtsdatum:</td>
+                    <td>${formatDatumAnzeige(ma.geburtsdatum)}</td>
+                  </tr>
+                  ` : ''}
+                  ${ma.adresse ? `
+                  <tr>
+                    <td class="text-muted">Adresse:</td>
+                    <td><small>${ma.adresse}</small></td>
+                  </tr>
+                  ` : ''}
+                </table>
+              </div>
+            </div>
 
-                            <!-- Arbeitsbeziehung -->
-                            <div class="card bg-dark mb-3">
-                              <div class="card-header">
-                                <h6 class="mb-0"><i class="bi bi-briefcase"></i> Arbeitsbeziehung</h6>
-                              </div>
-                              <div class="card-body">
-                                <table class="table table-sm table-borderless mb-0">
-                                  <tr>
-                                    <td class="text-muted" style="width: 40%;">Abteilung:</td>
-                                    <td>
-                                      <span class="abteilung-badge" style="background-color: ${ma.abteilung_farbe}">
-                                        ${ma.abteilung_name}
-                                      </span>
-                                    </td>
-                                  </tr>
-                                  <tr>
-                                    <td class="text-muted">Eintrittsdatum:</td>
-                                    <td>${formatDatumAnzeige(ma.eintrittsdatum)}</td>
-                                  </tr>
-                                  ${ma.austrittsdatum ? `
-                                  <tr>
-                                    <td class="text-muted">Austrittsdatum:</td>
-                                    <td>
-                                      <span class="badge bg-danger">${formatDatumAnzeige(ma.austrittsdatum)}</span>
-                                    </td>
-                                  </tr>
-                                  ` : ''}
-                                  <tr>
-                                    <td class="text-muted">Status:</td>
-                                    <td>
-                                      <span class="badge ${ma.status === 'AKTIV' ? 'bg-success' : 'bg-secondary'}">
-                                        ${ma.status}
-                                      </span>
-                                    </td>
-                                  </tr>
-                                </table>
-                              </div>
-                            </div>
-                          </div>
-
-                          <div class="col-md-6">
-                            <!-- Arbeitszeit -->
-                            <div class="card bg-dark mb-3">
-                              <div class="card-header">
-                                <h6 class="mb-0"><i class="bi bi-clock-history"></i> Arbeitszeit</h6>
-                              </div>
-                              <div class="card-body">
-                                <table class="table table-sm table-borderless mb-0">
-                                  <tr>
-                                    <td class="text-muted" style="width: 40%;">Wochenstunden:</td>
-                                    <td class="fw-bold">${ma.wochenstunden || 40}h</td>
-                                  </tr>
-                                </table>
-                                <div id="arbeitszeitmodellAnzeige" class="mt-2">
-                                  <small class="text-muted d-block mb-1">Wochenplan:</small>
-                                  <div class="text-muted small" style="line-height: 1.6;">
-                                    Wird geladen...
-                                  </div>
-                                </div>
-                                <button class="btn btn-sm btn-outline-info mt-2 w-100" id="btnArbeitszeitmodell">
-                                  <i class="bi bi-calendar-week"></i> Bearbeiten
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-
-                      </div>
+            <!-- Gehalt (ausklappbar) -->
+            <div class="card bg-dark mb-3">
+              <div class="card-header clickable" data-bs-toggle="collapse" data-bs-target="#gehaltCollapse" style="cursor: pointer;">
+                <div class="d-flex justify-content-between align-items-center">
+                  <h6 class="mb-0"><i class="bi bi-currency-euro"></i> Gehalt</h6>
+                  <i class="bi bi-chevron-down"></i>
+                </div>
+              </div>
+              <div id="gehaltCollapse" class="collapse">
+                <div class="card-body">
+                  ${ma.gehalt ? `
+                    <div class="text-center">
+                      <div class="display-6 fw-bold text-success">${formatZahl(ma.gehalt)} €</div>
+                      <small class="text-muted">Bruttogehalt pro Monat</small>
                     </div>
+                  ` : `
+                    <div class="text-center text-muted">
+                      <i class="bi bi-dash-circle fs-1 d-block mb-2"></i>
+                      Keine Gehaltsinformation hinterlegt
+                    </div>
+                  `}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="col-md-6">
+            <!-- Arbeitsbeziehung -->
+            <div class="card bg-dark mb-3">
+              <div class="card-header">
+                <h6 class="mb-0"><i class="bi bi-briefcase"></i> Arbeitsbeziehung</h6>
+              </div>
+              <div class="card-body">
+                <table class="table table-sm table-borderless mb-0">
+                  <tr>
+                    <td class="text-muted" style="width: 40%;">Abteilung:</td>
+                    <td>
+                      <span class="abteilung-badge" style="background-color: ${ma.abteilung_farbe}">
+                        ${ma.abteilung_name}
+                      </span>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td class="text-muted">Eintrittsdatum:</td>
+                    <td>${formatDatumAnzeige(ma.eintrittsdatum)}</td>
+                  </tr>
+                  ${ma.austrittsdatum ? `
+                  <tr>
+                    <td class="text-muted">Austrittsdatum:</td>
+                    <td>
+                      <span class="badge bg-danger">${formatDatumAnzeige(ma.austrittsdatum)}</span>
+                    </td>
+                  </tr>
+                  ` : ''}
+                  <tr>
+                    <td class="text-muted">Status:</td>
+                    <td>
+                      <span class="badge ${ma.status === 'AKTIV' ? 'bg-success' : 'bg-secondary'}">
+                        ${ma.status}
+                      </span>
+                    </td>
+                  </tr>
+                </table>
+              </div>
+            </div>
+
+            <!-- Arbeitszeit -->
+            <div class="card bg-dark mb-3">
+              <div class="card-header">
+                <h6 class="mb-0"><i class="bi bi-clock-history"></i> Arbeitszeit</h6>
+              </div>
+              <div class="card-body">
+                <table class="table table-sm table-borderless mb-0">
+                  <tr>
+                    <td class="text-muted" style="width: 40%;">Wochenstunden:</td>
+                    <td class="fw-bold">${ma.wochenstunden || 40}h</td>
+                  </tr>
+                </table>
+                <div id="arbeitszeitmodellAnzeige" class="mt-2">
+                  <small class="text-muted d-block mb-1">Wochenplan:</small>
+                  <div class="text-muted small" style="line-height: 1.6;">
+                    Wird geladen...
                   </div>
                 </div>
+                <button class="btn btn-sm btn-outline-info mt-2 w-100" id="btnArbeitszeitmodell">
+                  <i class="bi bi-calendar-week"></i> Bearbeiten
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
 
                 <!-- TAB 2: URLAUB & ABWESENHEIT -->
                 <div class="tab-pane fade ${herkunft === 'urlaubsplaner' ? 'show active' : ''}" id="urlaub" role="tabpanel">

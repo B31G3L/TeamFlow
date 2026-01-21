@@ -383,7 +383,29 @@ function createTables() {
     
     // Standard-Abteilungen erstellen
     createDefaultDepartments();
-    
+    // In der createTables() Funktion nach Zeile 141 hinzufügen:
+
+// Migration: Adresse und Gehalt hinzufügen
+try {
+  const columns = db.prepare("PRAGMA table_info(mitarbeiter)").all();
+  
+  const hasAdresse = columns.some(col => col.name === 'adresse');
+  const hasGehalt = columns.some(col => col.name === 'gehalt');
+  
+  if (!hasAdresse) {
+    logger.info('🔄 Migration: Füge adresse Spalte hinzu');
+    db.exec('ALTER TABLE mitarbeiter ADD COLUMN adresse TEXT');
+    logger.success('✅ Migration erfolgreich: adresse hinzugefügt');
+  }
+  
+  if (!hasGehalt) {
+    logger.info('🔄 Migration: Füge gehalt Spalte hinzu');
+    db.exec('ALTER TABLE mitarbeiter ADD COLUMN gehalt REAL');
+    logger.success('✅ Migration erfolgreich: gehalt hinzugefügt');
+  }
+} catch (error) {
+  logger.warn('⚠️ Migration adresse/gehalt übersprungen', { error: error.message });
+}
     logger.debug('✅ Tabellen erstellt');
   } catch (error) {
     logger.error('❌ Fehler beim Erstellen der Tabellen', {
