@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-PDF-Export für Teamplanner
+PDF-Export für TeamFlow
 Erstellt eine formatierte PDF-Datei aus Urlaubsdaten
 """
 

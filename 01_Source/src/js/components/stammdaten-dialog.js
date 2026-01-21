@@ -208,185 +208,258 @@ class StammdatenDialog extends DialogBase {
    * NEU: Arbeitszeitmodell Button hinzugefügt
    * NEU: Switch für Vollzeit/Angepasst
    */
+ 
   async zeigeStammdatenBearbeiten(mitarbeiterId, callback) {
     const mitarbeiter = await this.dataManager.getMitarbeiter(mitarbeiterId);
 
     if (!mitarbeiter) {
-      showNotification('Fehler', 'Mitarbeiter nicht gefunden', 'danger');
-      return;
-    }
+  showNotification('Fehler', 'Mitarbeiter nicht gefunden', 'danger');
+  return;
+}
 
-    const abteilungen = await this.dataManager.getAlleAbteilungen();
-    const wochenstunden = mitarbeiter.wochenstunden || 40;
-    const istVollzeit = wochenstunden === 40;
+const abteilungen = await this.dataManager.getAlleAbteilungen();
+const wochenstunden = mitarbeiter.wochenstunden || 40;
+const istVollzeit = wochenstunden === 40;
 
-    const modalHtml = `
-      <div class="modal fade" id="stammdatenBearbeitenModal" tabindex="-1">
-        <div class="modal-dialog">
-          <div class="modal-content">
-            <div class="modal-header">
-              <h5 class="modal-title">
-                <i class="bi bi-pencil-square"></i> Mitarbeiter bearbeiten
-              </h5>
-              <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+// Adresse in Zeilen aufteilen
+const adresseZeilen = mitarbeiter.adresse ? mitarbeiter.adresse.split('\n').map(z => z.trim()).filter(z => z) : [];
+const strasse = adresseZeilen[0] || '';
+const plzOrt = adresseZeilen[1] || '';
+
+// PLZ und Ort aus zweiter Zeile extrahieren
+let plz = '';
+let ort = '';
+if (plzOrt) {
+  const parts = plzOrt.split(' ');
+  if (parts.length > 0 && /^\d{5}$/.test(parts[0])) {
+    plz = parts[0];
+    ort = parts.slice(1).join(' ');
+  } else {
+    ort = plzOrt;
+  }
+}
+
+// Gehalt formatieren
+const gehaltFormatiert = mitarbeiter.gehalt ? formatWaehrung(mitarbeiter.gehalt) : '';
+
+const modalHtml = `
+  <div class="modal fade" id="stammdatenBearbeitenModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">
+            <i class="bi bi-pencil-square"></i> Mitarbeiter bearbeiten
+          </h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <!-- Arbeitszeitmodell-Karte -->
+          <div class="alert alert-info d-flex justify-content-between align-items-center mb-3">
+            <div>
+              <i class="bi bi-calendar-week"></i>
+              <strong>Arbeitszeitmodell</strong>
+              <div class="small text-muted mt-1">Detaillierter Wochenplan mit Halbtagen</div>
             </div>
-            <div class="modal-body">
-              <!-- Arbeitszeitmodell-Karte -->
-              <div class="alert alert-info d-flex justify-content-between align-items-center mb-3">
-                <div>
-                  <i class="bi bi-calendar-week"></i>
-                  <strong>Arbeitszeitmodell</strong>
-                  <div class="small text-muted mt-1">Detaillierter Wochenplan mit Halbtagen</div>
-                </div>
-                <button type="button" class="btn btn-sm btn-outline-info" id="btnArbeitszeitmodell">
-                  <i class="bi bi-pencil"></i> Bearbeiten
-                </button>
-              </div>
-
-              <form id="stammdatenBearbeitenForm">
-                <div class="row">
-                  <div class="col-md-6 mb-3">
-                    <label class="form-label">Vorname *</label>
-                    <input type="text" class="form-control" id="vorname" value="${mitarbeiter.vorname}" required>
-                  </div>
-                  <div class="col-md-6 mb-3">
-                    <label class="form-label">Nachname *</label>
-                    <input type="text" class="form-control" id="nachname" value="${mitarbeiter.nachname}" required>
-                  </div>
-                </div>
-
-                <div class="mb-3">
-                  <label class="form-label">Abteilung *</label>
-                  <select class="form-select" id="abteilung" required>
-                    ${abteilungen.map(a => `<option value="${a.name}" ${a.name === mitarbeiter.abteilung_name ? 'selected' : ''}>${a.name}</option>`).join('')}
-                  </select>
-                </div>
-
-                <div class="row">
-                  <div class="col-md-6 mb-3">
-                    <label class="form-label">Geburtsdatum</label>
-                    <input type="date" class="form-control" id="geburtsdatum" value="${mitarbeiter.geburtsdatum || ''}">
-                  </div>
-                  <div class="col-md-6 mb-3">
-                    <label class="form-label">Einstellungsdatum *</label>
-                    <input type="date" class="form-control" id="einstellungsdatum" value="${mitarbeiter.eintrittsdatum}" required>
-                  </div>
-                </div>
-
-                <div class="mb-3">
-                  <label class="form-label">Urlaubstage pro Jahr *</label>
-                  <input type="number" class="form-control" id="urlaubstageJahr" value="${mitarbeiter.urlaubstage_jahr}" min="0" max="50" required>
-                </div>
-
-                <!-- NEU: Arbeitszeit-Switch -->
-                <div class="mb-3">
-                  <label class="form-label">Arbeitszeit *</label>
-                  <div class="d-flex align-items-center gap-3 mb-2">
-                    <div class="form-check form-switch">
-                      <input class="form-check-input" type="checkbox" id="arbeitszeitSwitch" ${istVollzeit ? 'checked' : ''}>
-                      <label class="form-check-label fw-bold" for="arbeitszeitSwitch" id="arbeitszeitLabel">
-                        ${istVollzeit ? '<i class="bi bi-check-circle text-success"></i> Vollzeit (40h)' : `<i class="bi bi-clock-history text-info"></i> Angepasst (${wochenstunden}h)`}
-                      </label>
-                    </div>
-                  </div>
-                  
-                  <!-- Angepasste Stunden -->
-                  <div id="angepassteStundenContainer" class="${istVollzeit ? 'd-none' : ''} mt-2">
-                    <div class="input-group">
-                      <input type="number" class="form-control" id="wochenstunden" value="${wochenstunden}" min="0" max="60" step="0.5" required>
-                      <span class="input-group-text">Stunden/Woche</span>
-                    </div>
-                    <small class="text-muted">Geben Sie die individuelle Wochenstundenzahl ein</small>
-                  </div>
-                </div>
-
-                <div class="mb-3">
-                  <label class="form-label">Austrittsdatum</label>
-                  <input type="date" class="form-control" id="austrittsdatum" value="${mitarbeiter.austrittsdatum || ''}">
-                  <small class="form-text text-muted">Optional - leer lassen wenn noch beschäftigt</small>
-                </div>
-
-                <div class="mb-3">
-  <label class="form-label">Adresse</label>
-  <textarea class="form-control" id="adresse" rows="2" placeholder="Straße, Hausnummer, PLZ, Ort">${mitarbeiter.adresse || ''}</textarea>
-  <small class="form-text text-muted">Optionale Adresse des Mitarbeiters</small>
-</div>
-
-<div class="mb-3">
-  <label class="form-label">Gehalt (Brutto/Monat)</label>
-  <div class="input-group">
-    <input type="number" class="form-control" id="gehalt" value="${mitarbeiter.gehalt || ''}" step="0.01" min="0" placeholder="0.00">
-    <span class="input-group-text">€</span>
-  </div>
-  <small class="form-text text-muted">Optionales Bruttogehalt pro Monat</small>
-</div>
-              </form>
-            </div>
-            <div class="modal-footer">
-              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Abbrechen</button>
-              <button type="button" class="btn btn-primary" id="btnSpeichern">
-                <i class="bi bi-check-lg"></i> Speichern
-              </button>
-            </div>
+            <button type="button" class="btn btn-sm btn-outline-info" id="btnArbeitszeitmodell">
+              <i class="bi bi-pencil"></i> Bearbeiten
+            </button>
           </div>
+
+          <form id="stammdatenBearbeitenForm">
+            <div class="row">
+              <div class="col-md-6 mb-3">
+                <label class="form-label">Vorname *</label>
+                <input type="text" class="form-control" id="vorname" value="${mitarbeiter.vorname}" required>
+              </div>
+              <div class="col-md-6 mb-3">
+                <label class="form-label">Nachname *</label>
+                <input type="text" class="form-control" id="nachname" value="${mitarbeiter.nachname}" required>
+              </div>
+            </div>
+
+            <div class="mb-3">
+              <label class="form-label">Abteilung *</label>
+              <select class="form-select" id="abteilung" required>
+                ${abteilungen.map(a => `<option value="${a.name}" ${a.name === mitarbeiter.abteilung_name ? 'selected' : ''}>${a.name}</option>`).join('')}
+              </select>
+            </div>
+
+            <div class="row">
+              <div class="col-md-6 mb-3">
+                <label class="form-label">Geburtsdatum</label>
+                <input type="date" class="form-control" id="geburtsdatum" value="${mitarbeiter.geburtsdatum || ''}">
+              </div>
+              <div class="col-md-6 mb-3">
+                <label class="form-label">Einstellungsdatum *</label>
+                <input type="date" class="form-control" id="einstellungsdatum" value="${mitarbeiter.eintrittsdatum}" required>
+              </div>
+            </div>
+
+            <div class="mb-3">
+              <label class="form-label">Urlaubstage pro Jahr *</label>
+              <input type="number" class="form-control" id="urlaubstageJahr" value="${mitarbeiter.urlaubstage_jahr}" min="0" max="50" required>
+            </div>
+
+            <!-- Arbeitszeit-Switch -->
+            <div class="mb-3">
+              <label class="form-label">Arbeitszeit *</label>
+              <div class="d-flex align-items-center gap-3 mb-2">
+                <div class="form-check form-switch">
+                  <input class="form-check-input" type="checkbox" id="arbeitszeitSwitch" ${istVollzeit ? 'checked' : ''}>
+                  <label class="form-check-label fw-bold" for="arbeitszeitSwitch" id="arbeitszeitLabel">
+                    ${istVollzeit ? '<i class="bi bi-check-circle text-success"></i> Vollzeit (40h)' : `<i class="bi bi-clock-history text-info"></i> Angepasst (${wochenstunden}h)`}
+                  </label>
+                </div>
+              </div>
+              
+              <!-- Angepasste Stunden -->
+              <div id="angepassteStundenContainer" class="${istVollzeit ? 'd-none' : ''} mt-2">
+                <div class="input-group">
+                  <input type="number" class="form-control" id="wochenstunden" value="${wochenstunden}" min="0" max="60" step="0.5" required>
+                  <span class="input-group-text">Stunden/Woche</span>
+                </div>
+                <small class="text-muted">Geben Sie die individuelle Wochenstundenzahl ein</small>
+              </div>
+            </div>
+
+            <div class="mb-3">
+              <label class="form-label">Austrittsdatum</label>
+              <input type="date" class="form-control" id="austrittsdatum" value="${mitarbeiter.austrittsdatum || ''}">
+              <small class="form-text text-muted">Optional - leer lassen wenn noch beschäftigt</small>
+            </div>
+
+            <hr class="my-4">
+            
+            <!-- Adresse Bereich -->
+            <h6 class="mb-3">
+              <i class="bi bi-geo-alt"></i> Adresse
+            </h6>
+            <div class="mb-3">
+              <label class="form-label">Straße und Hausnummer</label>
+              <input type="text" class="form-control" id="adresseStrasse" value="${strasse}" placeholder="z.B. Musterstraße 123">
+            </div>
+            <div class="row">
+              <div class="col-md-4 mb-3">
+                <label class="form-label">PLZ</label>
+                <input type="text" class="form-control" id="adressePlz" value="${plz}" placeholder="12345" maxlength="5" pattern="[0-9]{5}">
+              </div>
+              <div class="col-md-8 mb-3">
+                <label class="form-label">Ort</label>
+                <input type="text" class="form-control" id="adresseOrt" value="${ort}" placeholder="Musterstadt">
+              </div>
+            </div>
+
+            <hr class="my-4">
+
+            <!-- Gehalt Bereich -->
+            <h6 class="mb-3">
+              <i class="bi bi-currency-euro"></i> Gehalt
+            </h6>
+            <div class="mb-3">
+              <label class="form-label">Bruttogehalt pro Monat</label>
+              <div class="input-group">
+                <input type="text" class="form-control" id="gehalt" value="${gehaltFormatiert}" placeholder="0,00">
+                <span class="input-group-text">€</span>
+              </div>
+              <small class="form-text text-muted">
+                ${mitarbeiter.gehalt ? `Aktuell: ${gehaltFormatiert} €` : 'Optional - z.B. 2.500,00 oder 45.000,00'}
+              </small>
+            </div>
+          </form>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Abbrechen</button>
+          <button type="button" class="btn btn-primary" id="btnSpeichern">
+            <i class="bi bi-check-lg"></i> Speichern
+          </button>
         </div>
       </div>
-    `;
+    </div>
+  </div>
+`;
 
-    await this.showModal(modalHtml, async () => {
-      const form = document.getElementById('stammdatenBearbeitenForm');
-      if (!form.checkValidity()) {
-        form.reportValidity();
-        return false;
-      }
+await this.showModal(modalHtml, async () => {
+  const form = document.getElementById('stammdatenBearbeitenForm');
+  if (!form.checkValidity()) {
+    form.reportValidity();
+    return false;
+  }
 
-      const daten = {
-  vorname: document.getElementById('vorname').value,
-  nachname: document.getElementById('nachname').value,
-  email: null,
-  abteilung: document.getElementById('abteilung').value,
-  geburtsdatum: document.getElementById('geburtsdatum').value || null,
-  einstellungsdatum: document.getElementById('einstellungsdatum').value,
-  urlaubstage_jahr: parseFloat(document.getElementById('urlaubstageJahr').value),
-  wochenstunden: parseFloat(document.getElementById('wochenstunden').value),
-  austrittsdatum: document.getElementById('austrittsdatum').value || null,
-  adresse: document.getElementById('adresse').value || null,
-  gehalt: document.getElementById('gehalt').value ? parseFloat(document.getElementById('gehalt').value) : null
-};
+  // Adresse zusammenbauen
+  const strasse = document.getElementById('adresseStrasse').value.trim();
+  const plz = document.getElementById('adressePlz').value.trim();
+  const ort = document.getElementById('adresseOrt').value.trim();
+  
+  let adresse = null;
+  if (strasse || plz || ort) {
+    const teile = [];
+    if (strasse) teile.push(strasse);
+    if (plz && ort) {
+      teile.push(`${plz} ${ort}`);
+    } else if (plz) {
+      teile.push(plz);
+    } else if (ort) {
+      teile.push(ort);
+    }
+    adresse = teile.length > 0 ? teile.join('\n') : null;
+  }
 
-      try {
-        await this.dataManager.stammdatenAktualisieren(mitarbeiterId, daten);
-        showNotification('Erfolg', `${daten.vorname} ${daten.nachname} wurde aktualisiert!`, 'success');
-        if (callback) await callback();
-        return true;
-      } catch (error) {
-        showNotification('Fehler', error.message, 'danger');
-        return false;
-      }
-    });
+  // Gehalt parsen (deutsche Formatierung)
+  const gehaltStr = document.getElementById('gehalt').value.trim();
+  let gehalt = null;
+  if (gehaltStr) {
+    const cleaned = gehaltStr.replace(/\./g, '').replace(',', '.');
+    const parsed = parseFloat(cleaned);
+    gehalt = isNaN(parsed) ? null : parsed;
+  }
 
-    // Event-Listener und Switch initialisieren
-    setTimeout(() => {
-      // Arbeitszeitmodell Button
-      const btnArbeitszeitmodell = document.getElementById('btnArbeitszeitmodell');
-      if (btnArbeitszeitmodell) {
-        btnArbeitszeitmodell.addEventListener('click', async () => {
-          const modal = bootstrap.Modal.getInstance(document.getElementById('stammdatenBearbeitenModal'));
-          if (modal) modal.hide();
-          
-          if (typeof dialogManager !== 'undefined') {
-            await dialogManager.zeigeArbeitszeitmodell(mitarbeiterId, async () => {
-              // Neu laden nach Änderung
-              if (callback) await callback();
-              setTimeout(() => this.zeigeStammdatenBearbeiten(mitarbeiterId, callback), 300);
-            });
-          }
+  const daten = {
+    vorname: document.getElementById('vorname').value,
+    nachname: document.getElementById('nachname').value,
+    email: null,
+    abteilung: document.getElementById('abteilung').value,
+    geburtsdatum: document.getElementById('geburtsdatum').value || null,
+    einstellungsdatum: document.getElementById('einstellungsdatum').value,
+    urlaubstage_jahr: parseFloat(document.getElementById('urlaubstageJahr').value),
+    wochenstunden: parseFloat(document.getElementById('wochenstunden').value),
+    austrittsdatum: document.getElementById('austrittsdatum').value || null,
+    adresse: adresse,
+    gehalt: gehalt
+  };
+
+  try {
+    await this.dataManager.stammdatenAktualisieren(mitarbeiterId, daten);
+    showNotification('Erfolg', `${daten.vorname} ${daten.nachname} wurde aktualisiert!`, 'success');
+    if (callback) await callback();
+    return true;
+  } catch (error) {
+    showNotification('Fehler', error.message, 'danger');
+    return false;
+  }
+});
+
+// Event-Listener und Switch initialisieren
+setTimeout(() => {
+  // Arbeitszeitmodell Button
+  const btnArbeitszeitmodell = document.getElementById('btnArbeitszeitmodell');
+  if (btnArbeitszeitmodell) {
+    btnArbeitszeitmodell.addEventListener('click', async () => {
+      const modal = bootstrap.Modal.getInstance(document.getElementById('stammdatenBearbeitenModal'));
+      if (modal) modal.hide();
+      
+      if (typeof dialogManager !== 'undefined') {
+        await dialogManager.zeigeArbeitszeitmodell(mitarbeiterId, async () => {
+          // Neu laden nach Änderung
+          if (callback) await callback();
+          setTimeout(() => this.zeigeStammdatenBearbeiten(mitarbeiterId, callback), 300);
         });
       }
+    });
+  }
 
-      // Initialisiere Arbeitszeit-Switch
-      this._initArbeitszeitSwitch();
-    }, 100);
+  // Initialisiere Arbeitszeit-Switch
+  this._initArbeitszeitSwitch();
+}, 100);
   }
 
   /**

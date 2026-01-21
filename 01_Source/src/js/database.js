@@ -1,5 +1,5 @@
 /**
- * Teamplanner Database Layer (Renderer)
+ * TeamFlow Database Layer (Renderer)
  * IPC Wrapper für Datenbank-Kommunikation mit Main Process
  * 
  * FIXES:
@@ -7,7 +7,7 @@
  * - Konsistente Rückgabewerte
  */
 
-class TeamplannerDatabase {
+class TeamFlowDatabase {
   constructor() {
     if (!window.electronAPI || !window.electronAPI.db) {
       throw new Error('Electron API nicht verfügbar! Stelle sicher, dass preload.js geladen wurde.');

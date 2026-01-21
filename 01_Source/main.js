@@ -21,7 +21,7 @@ class SimpleLogger {
     }
     
     const today = new Date().toISOString().split('T')[0];
-    this.logFile = path.join(this.logDir, `teamplanner-${today}.log`);
+    this.logFile = path.join(this.logDir, `TeamFlow-${today}.log`);
     
     this.info('📝 Logger initialisiert', { logFile: this.logFile });
     this.rotateLogs(30);
@@ -151,7 +151,7 @@ function getDatabasePath() {
     fs.mkdirSync(basePath, { recursive: true });
   }
   
-  const dbPath = path.join(basePath, 'urlaubsplanner.db');
+  const dbPath = path.join(basePath, '_TeamFlowDB.db');
   
   logger.info('📂 Datenbank-Pfad ermittelt', {
     dbPath,
@@ -567,7 +567,7 @@ function createWindow() {
 app.whenReady().then(() => {
   // Logger initialisieren
   logger = new SimpleLogger();
-  logger.info('🚀 Teamplanner startet...', {
+  logger.info('🚀 TeamFlow startet...', {
     version: app.getVersion(),
     platform: process.platform,
     arch: process.arch,

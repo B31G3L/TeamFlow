@@ -1,5 +1,5 @@
 /**
- * Teamplanner - Renderer Process
+ * TeamFlow - Renderer Process
  * Orchestriert die gesamte App
  * 
  * NEU: Zweistufige Navigation - Stammdaten & Urlaubsplaner
@@ -212,15 +212,15 @@ async function wechsleHauptansicht(menu) {
  * App initialisieren
  */
 async function initApp() {
-  console.log('🚀 Teamplanner wird gestartet...');
+  console.log('🚀 TeamFlow wird gestartet...');
 
   try {
     // Datenbank initialisieren
-    database = new TeamplannerDatabase();
+    database = new TeamFlowDatabase();
     console.log('✅ Datenbank initialisiert');
 
     // DataManager initialisieren
-    dataManager = new TeamplannerDataManager(database);
+    dataManager = new TeamFlowDataManager(database);
     console.log('✅ DataManager initialisiert');
 
     // Tabelle initialisieren
@@ -245,13 +245,13 @@ async function initApp() {
     // Initiale Daten laden (Urlaubsplaner ist initial aktiv)
     await loadData();
 
-    console.log('✅ Teamplanner erfolgreich gestartet');
+    console.log('✅ TeamFlow erfolgreich gestartet');
 
     // Willkommens-Notification
     setTimeout(async () => {
       const info = await database.getDatabaseInfo();
       showNotification(
-        'Teamplanner geladen',
+        'TeamFlow geladen',
         `Jahr: ${dataManager.aktuellesJahr} | Mitarbeiter: ${info.tables.mitarbeiter}`,
         'success'
       );

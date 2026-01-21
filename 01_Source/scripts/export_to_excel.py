@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Excel-Export für Teamplanner
+Excel-Export für TeamFlow
 Erstellt eine formatierte Excel-Datei aus Urlaubsdaten
 """
 

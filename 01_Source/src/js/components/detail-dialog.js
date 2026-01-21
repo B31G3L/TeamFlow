@@ -256,17 +256,23 @@ class DetailDialog extends DialogBase {
                     <td>${formatDatumAnzeige(ma.geburtsdatum)}</td>
                   </tr>
                   ` : ''}
-                  ${ma.adresse ? `
-                  <tr>
-                    <td class="text-muted">Adresse:</td>
-                    <td><small>${ma.adresse}</small></td>
-                  </tr>
-                  ` : ''}
                 </table>
               </div>
             </div>
 
-            <!-- Gehalt (ausklappbar) -->
+            <!-- Adresse Card -->
+            ${ma.adresse ? `
+            <div class="card bg-dark mb-3">
+              <div class="card-header">
+                <h6 class="mb-0"><i class="bi bi-geo-alt"></i> Adresse</h6>
+              </div>
+              <div class="card-body">
+                <div class="text-light" style="white-space: pre-line;">${ma.adresse}</div>
+              </div>
+            </div>
+            ` : ''}
+
+            <!-- Gehalt Card (ausklappbar) -->
             <div class="card bg-dark mb-3">
               <div class="card-header clickable" data-bs-toggle="collapse" data-bs-target="#gehaltCollapse" style="cursor: pointer;">
                 <div class="d-flex justify-content-between align-items-center">
@@ -278,7 +284,7 @@ class DetailDialog extends DialogBase {
                 <div class="card-body">
                   ${ma.gehalt ? `
                     <div class="text-center">
-                      <div class="display-6 fw-bold text-success">${formatZahl(ma.gehalt)} €</div>
+                      <div class="display-6 fw-bold text-success">${formatWaehrung(ma.gehalt)} €</div>
                       <small class="text-muted">Bruttogehalt pro Monat</small>
                     </div>
                   ` : `

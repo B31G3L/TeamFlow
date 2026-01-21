@@ -1,5 +1,5 @@
 /**
- * Teamplanner Data Manager
+ * TeamFlow Data Manager
  * Business Logic Layer - Async Version für IPC
  * 
  * FIXES:
@@ -16,7 +16,7 @@
  * - ÜBERSTUNDEN DETAILS: Aufgeteilt in Übertrag, Gemacht, Abgebaut
  */
 
-class TeamplannerDataManager {
+class TeamFlowDataManager {
   constructor(database, jahr = null) {
     this.db = database;
     this.aktuellesJahr = jahr || new Date().getFullYear();
@@ -906,5 +906,5 @@ if (daten.gehalt !== undefined) {
 
 // Export für ES6 Module
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = TeamplannerDataManager;
+  module.exports = TeamFlowDataManager;
 }
