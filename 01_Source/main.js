@@ -716,20 +716,6 @@ ipcMain.handle('app:getDatabasePath', async () => {
   return getDatabasePath();
 });
 
-/**
- * IPC Handler - Logs
- */
-ipcMain.handle('app:getLogPath', async () => {
-  return logger.getLogPath();
-});
-
-ipcMain.handle('app:getLogFiles', async () => {
-  return logger.getLogFiles();
-});
-
-ipcMain.handle('app:readLog', async (event, logFile) => {
-  return logger.readLog(logFile);
-});
 
 /**
  * IPC Handlers - Datenbank-Queries

@@ -161,9 +161,40 @@
   <script src="js/components/detail-dialog.js"></script>
   <script src="js/components/kalender-ansicht.js"></script>
   <script src="js/components/stammdaten-ansicht.js"></script>
-  <script src="js/components/log-viewer.js"></script>
   <script src="js/components/dialog-manager.js"></script>
   
   <script src="js/renderer.js"></script>
+  <!-- Footer -->
+  <footer class="app-footer" id="appFooter">
+    <div class="footer-content">
+      <div class="footer-item">
+        <i class="bi bi-info-circle"></i>
+        <span id="appVersion">TeamFlow v1.0.0</span>
+      </div>
+      
+      <div class="footer-separator"></div>
+      
+      <div class="footer-item">
+        <i class="bi bi-calendar3"></i>
+        <span id="currentDate">Wird geladen...</span>
+      </div>
+      
+      <div class="footer-separator"></div>
+      
+      <div class="footer-item">
+        <i class="bi bi-database"></i>
+        <span id="dbInfo">Mitarbeiter: 0</span>
+      </div>
+      
+      <div class="footer-separator"></div>
+      
+      <div class="footer-item">
+        <i class="bi bi-hdd"></i>
+        <span id="dbPath" title="Datenbank-Pfad">Lade Pfad...</span>
+      </div>
+    </div>
+  </footer>
+
+  <script src="js/format-utils.js"></script>
 </body>
 </html>

@@ -245,6 +245,9 @@ async function initApp() {
     // Initiale Daten laden (Urlaubsplaner ist initial aktiv)
     await loadData();
 
+        await initFooter();
+
+
     console.log('✅ TeamFlow erfolgreich gestartet');
 
     // Willkommens-Notification
@@ -470,6 +473,8 @@ async function loadData() {
     const filter = abteilung === 'Alle' ? null : abteilung;
 
     await tabelle.aktualisieren(filter);
+        await updateFooterDbInfo();
+
   } catch (error) {
     console.error('Fehler beim Laden:', error);
     showNotification('Fehler', `Daten konnten nicht geladen werden: ${error.message}`, 'danger');
@@ -546,6 +551,61 @@ async function exportToPdf() {
   } catch (error) {
     console.error('PDF-Export Fehler:', error);
     showNotification('Fehler', `Export fehlgeschlagen: ${error.message}`, 'danger');
+  }
+}
+
+/**
+ * Initialisiert und aktualisiert den Footer
+ */
+async function initFooter() {
+  // Version setzen
+  const version = await window.electronAPI.getAppVersion();
+  document.getElementById('appVersion').textContent = `TeamFlow v${version}`;
+  
+  // Aktuelles Datum setzen
+  updateFooterDate();
+  
+  // Datum jede Minute aktualisieren
+  setInterval(updateFooterDate, 60000);
+  
+  // Datenbank-Info aktualisieren
+  await updateFooterDbInfo();
+  
+  // Datenbank-Pfad setzen
+  const dbPath = await window.electronAPI.getDatabasePath();
+  const dbPathShort = dbPath.split(/[\\/]/).pop(); // Nur Dateiname
+  document.getElementById('dbPath').textContent = dbPathShort;
+  document.getElementById('dbPath').title = dbPath;
+}
+
+/**
+ * Aktualisiert das Datum im Footer
+ */
+function updateFooterDate() {
+  const now = new Date();
+  const options = { 
+    weekday: 'short', 
+    year: 'numeric', 
+    month: 'short', 
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  };
+  const dateStr = now.toLocaleDateString('de-DE', options);
+  document.getElementById('currentDate').textContent = dateStr;
+}
+
+/**
+ * Aktualisiert die Datenbank-Info im Footer
+ */
+async function updateFooterDbInfo() {
+  try {
+    const info = await database.getDatabaseInfo();
+    const mitarbeiterCount = info.tables.mitarbeiter || 0;
+    document.getElementById('dbInfo').textContent = `Mitarbeiter: ${mitarbeiterCount}`;
+  } catch (error) {
+    console.error('Fehler beim Laden der DB-Info:', error);
+    document.getElementById('dbInfo').textContent = 'DB: Fehler';
   }
 }
 /**

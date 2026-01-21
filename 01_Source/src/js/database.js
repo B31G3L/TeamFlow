@@ -110,7 +110,7 @@ class TeamFlowDatabase {
     }
 
     return {
-      path: 'userData/teamplanner_v3.db',
+      path: 'userData/TeamFlow.db',
       tables
     };
   }
@@ -118,5 +118,5 @@ class TeamFlowDatabase {
 
 // Export für ES6 Module
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = TeamplannerDatabase;
+  module.exports = TeamFlowDatabase;
 }
