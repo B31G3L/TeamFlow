@@ -1,51 +1,40 @@
-Contributing to TeamFlow
+# Contributing to TeamFlow
 
 Thank you for your interest in contributing to TeamFlow!
 
-Code of Conduct
+## Code of Conduct
 
 Please be respectful and constructive in all communication.
 
-How can I contribute?
-Bug Reports
+## How can I contribute?
 
-Use the issue templates
+### Bug Reports
+- Use the issue templates
+- Describe the problem clearly
+- Add screenshots
+- Include log files
 
-Describe the problem clearly
+### Feature Requests
+- Describe the use case
+- Explain the expected benefit
+- Discuss alternative solutions
 
-Add screenshots
+### Pull Requests
+1. Fork the repository
+2. Create a feature branch
+3. Commit with meaningful messages
+4. Test your changes
+5. Create a PR with a clear description
 
-Include log files
-
-Feature Requests
-
-Describe the use case
-
-Explain the expected benefit
-
-Discuss alternative solutions
-
-Pull Requests
-
-Fork the repository
-
-Create a feature branch
-
-Commit with meaningful messages
-
-Test your changes
-
-Create a PR with a clear description
-
-Development Setup
+## Development Setup
+```bash
 git clone https://github.com/yourusername/teamflow.git
 cd teamflow/01_Source
 npm install
 npm start
-
 Code Style
-
 JavaScript: Standard Style
+```
 
 Comments in German
 
