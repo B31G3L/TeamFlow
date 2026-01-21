@@ -32,12 +32,11 @@ git clone https://github.com/yourusername/teamflow.git
 cd teamflow/01_Source
 npm install
 npm start
-Code Style
-JavaScript: Standard Style
 ```
 
-Comments in German
-
-Meaningful variable names
+## Code Style
+- JavaScript: Standard Style
+- Comments in German
+- Meaningful variable names
 
 Thank you! 🙏
