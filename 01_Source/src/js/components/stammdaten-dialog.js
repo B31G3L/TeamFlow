@@ -341,16 +341,18 @@ class StammdatenDialog extends DialogBase {
       }
 
       const daten = {
-        vorname: document.getElementById('vorname').value,
-        nachname: document.getElementById('nachname').value,
-        email: null,
-        abteilung: document.getElementById('abteilung').value,
-        geburtsdatum: document.getElementById('geburtsdatum').value || null,
-        einstellungsdatum: document.getElementById('einstellungsdatum').value,
-        urlaubstage_jahr: parseFloat(document.getElementById('urlaubstageJahr').value),
-        wochenstunden: parseFloat(document.getElementById('wochenstunden').value),
-        austrittsdatum: document.getElementById('austrittsdatum').value || null
-      };
+  vorname: document.getElementById('vorname').value,
+  nachname: document.getElementById('nachname').value,
+  email: null,
+  abteilung: document.getElementById('abteilung').value,
+  geburtsdatum: document.getElementById('geburtsdatum').value || null,
+  einstellungsdatum: document.getElementById('einstellungsdatum').value,
+  urlaubstage_jahr: parseFloat(document.getElementById('urlaubstageJahr').value),
+  wochenstunden: parseFloat(document.getElementById('wochenstunden').value),
+  austrittsdatum: document.getElementById('austrittsdatum').value || null,
+  adresse: document.getElementById('adresse').value || null,
+  gehalt: document.getElementById('gehalt').value ? parseFloat(document.getElementById('gehalt').value) : null
+};
 
       try {
         await this.dataManager.stammdatenAktualisieren(mitarbeiterId, daten);
