@@ -849,6 +849,7 @@ class KalenderAnsicht {
     if (startWochentag < 0) startWochentag = 6;
 
     const heute = new Date();
+    heute.setHours(0, 0, 0, 0);
     const heuteStr = this._formatDatumLokal(heute);
 
     let html = '<div class="kalender-grid">';
@@ -871,7 +872,7 @@ class KalenderAnsicht {
     // Tage des Monats
     for (let tag = 1; tag <= letzterTag.getDate(); tag++) {
       const datum = new Date(this.currentYear, this.currentMonth, tag);
-      const datumStr = datum.toISOString().split('T')[0];
+      const datumStr = this._formatDatumLokal(datum);
       const wochentag = datum.getDay();
       const isWochenende = wochentag === 0 || wochentag === 6;
       const isHeute = datumStr === heuteStr;
@@ -961,13 +962,14 @@ class KalenderAnsicht {
     const letzterTag = new Date(this.currentYear, this.currentMonth + 1, 0).getDate();
 
     const heute = new Date();
+    heute.setHours(0, 0, 0, 0);
     const heuteStr = this._formatDatumLokal(heute);
 
     let html = '<div class="kalender-liste">';
 
     for (let tag = 1; tag <= letzterTag; tag++) {
       const datum = new Date(this.currentYear, this.currentMonth, tag);
-      const datumStr = datum.toISOString().split('T')[0];
+      const datumStr = this._formatDatumLokal(datum);
       const wochentag = datum.getDay();
       const isWochenende = wochentag === 0 || wochentag === 6;
       const isHeute = datumStr === heuteStr;
