@@ -725,6 +725,11 @@ if (daten.gehalt !== undefined) {
    * Speichert einen Eintrag (Urlaub, Krankheit, etc.)
    * FIX: Korrekte Fehlerbehandlung + Zeitzonen-Fix + Halbe-Tage-Fix + Überlappungs-Check
    */
+ /**
+   * Speichert einen Eintrag (Urlaub, Krankheit, etc.)
+   * FIX: Korrekte Fehlerbehandlung + Zeitzonen-Fix + Halbe-Tage-Fix + Überlappungs-Check
+   * NEU: Verwendet das vom User gewählte Bis-Datum für Urlaub
+   */
   async speichereEintrag(eintrag) {
     try {
       const typ = eintrag.typ;
@@ -736,19 +741,24 @@ if (daten.gehalt !== undefined) {
       let result;
 
       if (typ === 'urlaub') {
-        // FIX: Datum lokal parsen (ohne UTC-Konvertierung)
-        const vonDatum = this._parseDatumLokal(datum);
-        const bisDatum = new Date(vonDatum);
+        // NEU: Verwende das explizit übergebene Bis-Datum (falls vorhanden)
+        let bisDatumStr;
         
-        // FIX: Bei halben Tagen (0.5) und 1 Tag bleibt bisDatum = vonDatum
-        // Bei mehr als 1 Tag: bisDatum = vonDatum + (Tage - 1)
-        // WICHTIG: Nur bei MEHR als 1 Tag das Datum verschieben
-        if (wert > 1) {
-          const ganzeTage = Math.floor(wert);
-          bisDatum.setDate(bisDatum.getDate() + ganzeTage - 1);
+        if (eintrag.bis_datum) {
+          // User hat Bis-Datum gewählt - verwende es direkt
+          bisDatumStr = eintrag.bis_datum;
+        } else {
+          // Fallback: Alte Logik für halbe Tage
+          const vonDatum = this._parseDatumLokal(datum);
+          const bisDatum = new Date(vonDatum);
+          
+          if (wert > 1) {
+            const ganzeTage = Math.floor(wert);
+            bisDatum.setDate(bisDatum.getDate() + ganzeTage - 1);
+          }
+          
+          bisDatumStr = this._formatDatumLokal(bisDatum);
         }
-
-        const bisDatumStr = this._formatDatumLokal(bisDatum);
 
         // NEU: Prüfe auf Überlappungen
         const hatUeberlappung = await this.pruefeUeberlappung('urlaub', mitarbeiterId, datum, bisDatumStr);

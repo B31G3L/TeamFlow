@@ -143,11 +143,12 @@ class UrlaubDialog extends DialogBase {
         return false;
       }
 
+      // NEU: Verwende das vom Benutzer gewählte Bis-Datum, nicht das berechnete
       const eintrag = {
         typ: 'urlaub',
         mitarbeiter_id: mitarbeiterId,
         datum: vonDatum,
-        bis_datum: bisDatum, // NEU: Übergebe das tatsächliche Bis-Datum
+        bis_datum: bisDatum, // WICHTIG: Nutze das vom User gewählte Bis-Datum
         wert: tage, // Die berechneten Urlaubstage (z.B. 4 wenn Montag frei ist)
         beschreibung: document.getElementById('notiz').value || null
       };
