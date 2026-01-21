@@ -6,7 +6,7 @@
   ### Moderne Desktop-Anwendung zur Mitarbeiterverwaltung
   
   [![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)](https://github.com/deinusername/teamflow)
-  [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+ [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
   [![Electron](https://img.shields.io/badge/Electron-28.0.0-47848f.svg)](https://electronjs.org/)
   [![Platform](https://img.shields.io/badge/platform-Windows-0078d4.svg)](https://www.microsoft.com/windows)
   
