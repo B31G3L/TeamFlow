@@ -177,6 +177,29 @@ class KalenderAnsicht {
           });
         });
       }
+      const ueberstundenAbbauResult = await this.dataManager.db.query(`
+  SELECT datum, ABS(stunden) as stunden_abbau, notiz
+  FROM ueberstunden
+  WHERE mitarbeiter_id = ?
+    AND datum BETWEEN ? AND ?
+    AND stunden < 0
+`, [ma.id, startStr, endStr]);
+
+if (ueberstundenAbbauResult.success && ueberstundenAbbauResult.data) {
+  ueberstundenAbbauResult.data.forEach(u => {
+    this.abwesenheiten.push({
+      mitarbeiter: ma,
+      typ: 'ueberstunden_abbau',
+      von: u.datum,
+      bis: u.datum,
+      tage: u.stunden_abbau / 8, // Umrechnung in Tage (8h = 1 Tag)
+      stunden: u.stunden_abbau, // Original-Stundenwert
+      notiz: u.notiz,
+      farbe: '#d2fd14', // Orange
+      icon: 'clock-history'
+    });
+  });
+}
     }
   }
 
@@ -246,6 +269,10 @@ class KalenderAnsicht {
           <span class="legende-farbe" style="background-color: #fd7e14;"></span>
           <small>Veranstaltung</small>
         </span>
+          <span class="d-flex align-items-center gap-1">
+         <span class="legende-farbe" style="background-color: #d2fd14;"></span>
+         <small>Überstunden-Abbau</small>
+       </span>
       </div>
 
       <!-- Kalender-Container -->
@@ -1085,11 +1112,12 @@ class KalenderAnsicht {
    * Gibt Typ-Label zurück
    */
   _getTypLabel(typ) {
-    const labels = {
-      urlaub: 'Urlaub',
-      krankheit: 'Krank',
-      schulung: 'Schulung'
-    };
+      const labels = {
+         urlaub: 'Urlaub',
+         krankheit: 'Krank',
+         schulung: 'Schulung',
+         ueberstunden_abbau: 'Überstunden-Abbau'
+      };
     return labels[typ] || typ;
   }
 
