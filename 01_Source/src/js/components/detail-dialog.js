@@ -388,46 +388,63 @@ class DetailDialog extends DialogBase {
                     <div class="col-md-4 border-end" style="overflow-y: auto; background-color: #1a1a1a;">
                       <div class="p-3">
                         
-                        <!-- Urlaub ${jahr} -->
-                        <div class="card bg-dark mb-3">
-                          <div class="card-header clickable" id="clickUrlaub" style="cursor: pointer;" title="Klicken um Urlaub einzutragen">
-                            <div class="d-flex justify-content-between align-items-center">
-                              <h6 class="mb-0"><i class="bi bi-calendar-check text-success"></i> Urlaub ${jahr}</h6>
-                              <i class="bi bi-plus-circle text-success"></i>
-                            </div>
-                          </div>
-                          <div class="card-body">
-                            <table class="table table-sm table-borderless mb-0">
-                              <tr>
-                                <td class="text-muted" style="width: 40%;">Anspruch:</td>
-                                <td class="fw-bold">${formatZahl(stat.urlaubsanspruch)} Tage</td>
-                              </tr>
-                              <tr>
-                                <td class="text-muted">Übertrag ${jahr-1}:</td>
-                                <td>
-                                  <span class="clickable" id="clickUebertrag" style="cursor: pointer;" title="Klicken zum Anpassen">
-                                    ${formatZahl(stat.uebertrag_vorjahr)} Tage
-                                    <i class="bi bi-pencil-square text-info ms-1"></i>
-                                  </span>
-                                </td>
-                              </tr>
-                              <tr>
-                                <td class="text-muted">Verfügbar:</td>
-                                <td class="fw-bold text-info">${formatZahl(stat.urlaub_verfuegbar)} Tage</td>
-                              </tr>
-                              <tr>
-                                <td class="text-muted">Genommen:</td>
-                                <td class="fw-bold text-warning">${formatZahl(stat.urlaub_genommen)} Tage</td>
-                              </tr>
-                              <tr class="border-top">
-                                <td class="text-muted fw-bold">Resturlaub:</td>
-                                <td class="fs-5 fw-bold ${stat.urlaub_rest < 0 ? 'text-danger' : stat.urlaub_rest < 5 ? 'text-warning' : 'text-success'}">
-                                  ${formatZahl(stat.urlaub_rest)} Tage
-                                </td>
-                              </tr>
-                            </table>
-                          </div>
-                        </div>
+                       <!-- Urlaub ${jahr} -->
+<div class="card bg-dark mb-3">
+  <div class="card-header clickable" id="clickUrlaub" style="cursor: pointer;" title="Klicken um Urlaub einzutragen">
+    <div class="d-flex justify-content-between align-items-center">
+      <h6 class="mb-0"><i class="bi bi-calendar-check text-success"></i> Urlaub ${jahr}</h6>
+      <i class="bi bi-plus-circle text-success"></i>
+    </div>
+  </div>
+  <div class="card-body">
+    <table class="table table-sm table-borderless mb-0">
+      <tr>
+        <td class="text-muted" style="width: 50%;">Anspruch:</td>
+        <td class="fw-bold">${formatZahl(stat.urlaubsanspruch)} Tage</td>
+      </tr>
+      <tr>
+        <td class="text-muted">Übertrag ${jahr-1}:</td>
+        <td>
+          <span class="clickable" id="clickUebertrag" style="cursor: pointer;" title="Klicken zum Anpassen">
+            ${formatZahl(stat.uebertrag_original || stat.uebertrag_vorjahr)} Tage
+            <i class="bi bi-pencil-square text-info ms-1"></i>
+          </span>
+        </td>
+      </tr>
+      ${stat.verfallen && stat.verfallen > 0 ? `
+      <tr>
+        <td class="text-muted">
+          <i class="bi bi-x-circle text-danger"></i> Verfallen (31.03.${jahr}):
+        </td>
+        <td class="fw-bold text-danger">-${formatZahl(stat.verfallen)} Tage</td>
+      </tr>
+      ` : ''}
+      <tr>
+        <td class="text-muted">
+          Verfallend (31.03.${jahr}):
+          <i class="bi bi-info-circle" title="Übertrag der nicht bis 31.03. genommen wurde"></i>
+        </td>
+        <td class="fw-bold" id="verfallendeTage">
+          <span class="spinner-border spinner-border-sm" role="status"></span>
+        </td>
+      </tr>
+      <tr>
+        <td class="text-muted">Verfügbar:</td>
+        <td class="fw-bold text-info">${formatZahl(stat.urlaub_verfuegbar)} Tage</td>
+      </tr>
+      <tr>
+        <td class="text-muted">Genommen:</td>
+        <td class="fw-bold text-warning">${formatZahl(stat.urlaub_genommen)} Tage</td>
+      </tr>
+      <tr class="border-top">
+        <td class="text-muted fw-bold">Resturlaub:</td>
+        <td class="fs-5 fw-bold ${stat.urlaub_rest < 0 ? 'text-danger' : stat.urlaub_rest < 5 ? 'text-warning' : 'text-success'}">
+          ${formatZahl(stat.urlaub_rest)} Tage
+        </td>
+      </tr>
+    </table>
+  </div>
+</div>
 
                         <!-- Überstunden ${jahr} -->
                         <div class="card bg-dark mb-3">
@@ -612,10 +629,12 @@ class DetailDialog extends DialogBase {
     this._initClickHandlers(modalElement, mitarbeiterId, modal, jahr);
     this._initJahrNavigation(modalElement, mitarbeiterId, modal, jahr);
 
-    // Lade und zeige Arbeitszeitmodell
-    await this._ladeUndZeigeArbeitszeitmodell(mitarbeiterId);
+await this._ladeUndZeigeArbeitszeitmodell(mitarbeiterId);
 
-    modal.show();
+// NEU: Lade und zeige Verfallsinformation
+await this._ladeVerfallsinfo(modalElement, mitarbeiterId, jahr);
+
+modal.show();
 
     return new Promise((resolve) => {
       modalElement.addEventListener('hidden.bs.modal', () => {
@@ -652,7 +671,33 @@ class DetailDialog extends DialogBase {
       });
     }
   }
-
+/**
+ * Lädt und zeigt Verfallsinformation an
+ * NEU: Zeigt wie viel Urlaub bis 31.03. verfällt
+ */
+async _ladeVerfallsinfo(modalElement, mitarbeiterId, jahr) {
+  try {
+    const verfallInfo = await this.dataManager.getVerfallenderUrlaub(mitarbeiterId, jahr);
+    
+    const verfallZelle = modalElement.querySelector('#verfallendeTage');
+    
+    if (!verfallZelle) return;
+    
+    const verfallendeTage = verfallInfo.verfaellt;
+    
+    // Farbe: Grün wenn 0, sonst Rot
+    const farbe = verfallendeTage === 0 ? 'text-success' : 'text-danger';
+    
+    verfallZelle.innerHTML = `<span class="${farbe}">${formatZahl(verfallendeTage)} Tage</span>`;
+    
+  } catch (error) {
+    console.error('Fehler beim Laden der Verfallsinfo:', error);
+    const verfallZelle = modalElement.querySelector('#verfallendeTage');
+    if (verfallZelle) {
+      verfallZelle.innerHTML = '<span class="text-muted">-</span>';
+    }
+  }
+}
   /**
    * Initialisiert Click-Handler für KPI-Karten und Buttons
    * FIX: Kehrt nach Aktion zur Detailansicht zurück

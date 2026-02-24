@@ -419,69 +419,134 @@ class TeamFlowDataManager {
       saldo: uebertrag + gemacht - abgebaut
     };
   }
-
+/**
+ * Berechnet verfallenden Urlaub zum 31. März
+ * NEU: Zeigt wie viel Übertrag nach 31.03. verfällt
+ */
+async getVerfallenderUrlaub(mitarbeiterId, jahr) {
+  // Hole Übertrag vom Vorjahr
+  const uebertrag = await this.berechneUebertrag(mitarbeiterId, jahr);
+  
+  // Wenn kein Übertrag vorhanden, kann nichts verfallen
+  if (uebertrag <= 0) {
+    return {
+      uebertrag: 0,
+      genommenBisMaerz: 0,
+      verfaellt: 0,
+      stichtag: `31.03.${jahr}`
+    };
+  }
+  
+  // Hole Urlaub der bis 31.03. genommen wurde
+  const result = await this.db.get(`
+    SELECT COALESCE(SUM(tage), 0) as summe
+    FROM urlaub
+    WHERE mitarbeiter_id = ?
+      AND von_datum >= ?
+      AND von_datum <= ?
+  `, [mitarbeiterId, `${jahr}-01-01`, `${jahr}-03-31`]);
+  
+  const genommenBisMaerz = (result.success && result.data) ? result.data.summe : 0;
+  
+  // Berechne Verfall
+  // Übertrag - genommen bis 31.03 = Rest der verfällt
+  const verfaellt = Math.max(uebertrag - genommenBisMaerz, 0);
+  
+  return {
+    uebertrag: uebertrag,
+    genommenBisMaerz: genommenBisMaerz,
+    verfaellt: verfaellt,
+    stichtag: `31.03.${jahr}`
+  };
+}
   /**
    * Gibt Statistik für einen Mitarbeiter zurück
    * FIX: Korrekte Datenextraktion überall
    * NEU: Überstunden werden KUMULATIV berechnet (über alle Jahre)
    */
-  async getMitarbeiterStatistik(mitarbeiterId) {
-    const mitarbeiterResult = await this.db.get(`
-      SELECT m.*, a.name as abteilung_name, a.farbe as abteilung_farbe
-      FROM mitarbeiter m
-      LEFT JOIN abteilungen a ON m.abteilung_id = a.id
-      WHERE m.id = ?
-    `, [mitarbeiterId]);
+  /**
+ * Gibt Statistik für einen Mitarbeiter zurück
+ * FIX: Korrekte Datenextraktion überall
+ * NEU: Überstunden werden KUMULATIV berechnet (über alle Jahre)
+ * NEU: Übertrag verfällt nach 31.03.
+ */
+async getMitarbeiterStatistik(mitarbeiterId) {
+  const mitarbeiterResult = await this.db.get(`
+    SELECT m.*, a.name as abteilung_name, a.farbe as abteilung_farbe
+    FROM mitarbeiter m
+    LEFT JOIN abteilungen a ON m.abteilung_id = a.id
+    WHERE m.id = ?
+  `, [mitarbeiterId]);
 
-    if (!mitarbeiterResult.success || !mitarbeiterResult.data) return null;
+  if (!mitarbeiterResult.success || !mitarbeiterResult.data) return null;
+  
+  const mitarbeiter = mitarbeiterResult.data;
+
+  // Übertrag berechnen
+  let uebertrag = await this.berechneUebertrag(mitarbeiterId, this.aktuellesJahr);
+
+  // NEU: Prüfe ob wir nach dem 31.03. sind
+  const heute = new Date();
+  const stichtag = new Date(this.aktuellesJahr, 2, 31); // 31. März
+  
+  let verfallenderUebertrag = 0;
+  
+  if (heute > stichtag && uebertrag > 0) {
+    // Nach 31.03. - prüfe wie viel vom Übertrag nicht genommen wurde
+    const verfallInfo = await this.getVerfallenderUrlaub(mitarbeiterId, this.aktuellesJahr);
+    verfallenderUebertrag = verfallInfo.verfaellt;
     
-    const mitarbeiter = mitarbeiterResult.data;
-
-    // Übertrag berechnen
-    const uebertrag = await this.berechneUebertrag(mitarbeiterId, this.aktuellesJahr);
-
-    // Anteiligen Urlaubsanspruch berechnen (nur im Eintrittsjahr relevant)
-    const urlaubsanspruch = this.berechneAnteiligenUrlaub(mitarbeiter, this.aktuellesJahr);
-
-    // Urlaub genommen
-    const urlaubGenommen = await this.getUrlaubSummeNachJahr(mitarbeiterId, this.aktuellesJahr);
-
-    // Krankheitstage - FIX
-    const krankheitResult = await this.db.get(`
-      SELECT COALESCE(SUM(tage), 0) as summe
-      FROM krankheit
-      WHERE mitarbeiter_id = ?
-        AND strftime('%Y', von_datum) = ?
-    `, [mitarbeiterId, this.aktuellesJahr.toString()]);
-
-    // Schulungstage - FIX
-    const schulungResult = await this.db.get(`
-      SELECT COALESCE(SUM(dauer_tage), 0) as summe
-      FROM schulung
-      WHERE mitarbeiter_id = ?
-        AND strftime('%Y', datum) = ?
-    `, [mitarbeiterId, this.aktuellesJahr.toString()]);
-
-    // Überstunden - NEU: KUMULATIV über alle Jahre bis einschließlich aktuelles Jahr
-    const ueberstundenResult = await this.db.get(`
-      SELECT COALESCE(SUM(stunden), 0) as summe
-      FROM ueberstunden
-      WHERE mitarbeiter_id = ?
-        AND strftime('%Y', datum) <= ?
-    `, [mitarbeiterId, this.aktuellesJahr.toString()]);
-
-    return {
-      mitarbeiter,
-      urlaubsanspruch: urlaubsanspruch, // Anteilig im Eintrittsjahr
-      uebertrag_vorjahr: uebertrag,
-      urlaub_verfuegbar: urlaubsanspruch + uebertrag,
-      urlaub_genommen: urlaubGenommen,
-      urlaub_rest: urlaubsanspruch + uebertrag - urlaubGenommen,
-      krankheitstage: (krankheitResult.success && krankheitResult.data) ? krankheitResult.data.summe : 0,
-      schulungstage: (schulungResult.success && schulungResult.data) ? schulungResult.data.summe : 0,
-      ueberstunden: (ueberstundenResult.success && ueberstundenResult.data) ? ueberstundenResult.data.summe : 0
-    };
+    // Ziehe verfallenen Übertrag ab
+    uebertrag = Math.max(0, uebertrag - verfallenderUebertrag);
   }
+
+  // Anteiligen Urlaubsanspruch berechnen (nur im Eintrittsjahr relevant)
+  const urlaubsanspruch = this.berechneAnteiligenUrlaub(mitarbeiter, this.aktuellesJahr);
+
+  // Urlaub genommen
+  const urlaubGenommen = await this.getUrlaubSummeNachJahr(mitarbeiterId, this.aktuellesJahr);
+
+  // Krankheitstage - FIX
+  const krankheitResult = await this.db.get(`
+    SELECT COALESCE(SUM(tage), 0) as summe
+    FROM krankheit
+    WHERE mitarbeiter_id = ?
+      AND strftime('%Y', von_datum) = ?
+  `, [mitarbeiterId, this.aktuellesJahr.toString()]);
+
+  // Schulungstage - FIX
+  const schulungResult = await this.db.get(`
+    SELECT COALESCE(SUM(dauer_tage), 0) as summe
+    FROM schulung
+    WHERE mitarbeiter_id = ?
+      AND strftime('%Y', datum) = ?
+  `, [mitarbeiterId, this.aktuellesJahr.toString()]);
+
+  // Überstunden - NEU: KUMULATIV über alle Jahre bis einschließlich aktuelles Jahr
+  const ueberstundenResult = await this.db.get(`
+    SELECT COALESCE(SUM(stunden), 0) as summe
+    FROM ueberstunden
+    WHERE mitarbeiter_id = ?
+      AND strftime('%Y', datum) <= ?
+  `, [mitarbeiterId, this.aktuellesJahr.toString()]);
+
+  // Ursprünglichen Übertrag speichern (für Anzeige)
+  const uebertragVorVerfall = await this.berechneUebertrag(mitarbeiterId, this.aktuellesJahr);
+
+  return {
+    mitarbeiter,
+    urlaubsanspruch: urlaubsanspruch,
+    uebertrag_vorjahr: uebertrag, // NEU: Bereits nach Verfall korrigiert
+    uebertrag_original: uebertragVorVerfall, // NEU: Original-Übertrag vor Verfall
+    verfallen: verfallenderUebertrag, // NEU: Verfallene Tage
+    urlaub_verfuegbar: urlaubsanspruch + uebertrag, // NEU: Bereits korrigiert
+    urlaub_genommen: urlaubGenommen,
+    urlaub_rest: urlaubsanspruch + uebertrag - urlaubGenommen, // NEU: Bereits korrigiert
+    krankheitstage: (krankheitResult.success && krankheitResult.data) ? krankheitResult.data.summe : 0,
+    schulungstage: (schulungResult.success && schulungResult.data) ? schulungResult.data.summe : 0,
+    ueberstunden: (ueberstundenResult.success && ueberstundenResult.data) ? ueberstundenResult.data.summe : 0
+  };
+}
 
   /**
    * Gibt alle Statistiken zurück (gefiltert nach Austrittsjahr)
