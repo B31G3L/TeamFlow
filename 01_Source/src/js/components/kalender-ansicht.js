@@ -747,6 +747,34 @@ if (ueberstundenAbbauResult.success && ueberstundenAbbauResult.data) {
       btnMonat?.classList.remove('active');
       this._renderKalender();
     });
+    const kalenderContainer = container.querySelector('#kalenderContainer');
+
+kalenderContainer?.addEventListener('click', (e) => {
+  const eintragEl = e.target.closest('.abwesenheit-eintrag');
+  const mehrBtn = e.target.closest('.mehr-eintraege');
+
+  if (eintragEl) {
+    e.stopPropagation();
+
+    const maId = eintragEl.dataset.mitarbeiterId;
+    const typ = eintragEl.dataset.typ;
+    const von = eintragEl.dataset.von;
+
+    const eintrag = this.abwesenheiten.find(a =>
+      a.mitarbeiter.id === maId &&
+      a.typ === typ &&
+      a.von === von
+    );
+
+    if (eintrag) {
+      this._zeigeEintragTooltip(eintrag, eintragEl);
+    }
+
+  } else if (mehrBtn) {
+    e.stopPropagation();
+    this._zeigeAlleTageseintraege(mehrBtn.dataset.datum);
+  }
+});
   }
 
   /**
@@ -762,40 +790,12 @@ if (ueberstundenAbbauResult.success && ueberstundenAbbauResult.data) {
       container.innerHTML = this._erstelleMonatsAnsicht();
     }
 
-    // Event-Listener für Einträge
-    // ERSETZE die Zeilen 165-174 mit:
-
-    // Event-Listener für Einträge UND "mehr..." Buttons
-    container.addEventListener('click', (e) => {
-      const eintragEl = e.target.closest('.abwesenheit-eintrag');
-      const mehrBtn = e.target.closest('.mehr-eintraege');
-
-      if (eintragEl) {
-        e.stopPropagation();
-        const maId = eintragEl.dataset.mitarbeiterId;
-        const typ = eintragEl.dataset.typ;
-        const von = eintragEl.dataset.von;
-
-        // Finde den passenden Eintrag
-        const eintrag = this.abwesenheiten.find(a =>
-          a.mitarbeiter.id === maId &&
-          a.typ === typ &&
-          a.von === von
-        );
-
-        if (eintrag) {
-          this._zeigeEintragTooltip(eintrag, eintragEl);
-        }
-      } else if (mehrBtn) {
-        e.stopPropagation();
-        this._zeigeAlleTageseintraege(mehrBtn.dataset.datum);
-      }
-    });
   }
   /**
    * Zeigt alle Einträge eines Tages in einem Modal
    */
   _zeigeAlleTageseintraege(datum) {
+    if (document.querySelector('#tageseintraegeModal')) return;
     const tagesAbwesenheiten = this._getAbwesenheitenFuerTag(datum);
     const datumFormatiert = formatDatumAnzeige(datum);
 
