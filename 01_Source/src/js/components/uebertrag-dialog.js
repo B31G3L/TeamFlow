@@ -2,7 +2,7 @@
  * Übertrag-Dialog
  * Manuelles Anpassen des Übertrags für ein Jahr
  * 
- * NEU: Kompletter Dialog für manuelle Übertrag-Anpassung
+ * NEU: Checkbox ob Übertrag am 31.03. verfällt (Default: ja)
  */
 
 class UebertragDialog extends DialogBase {
@@ -23,6 +23,13 @@ class UebertragDialog extends DialogBase {
     const manuell = await this.dataManager.getManuellAngepassterUebertrag(mitarbeiterId, jahr);
     const aktuellAngepasst = manuell !== null;
     const aktuellerWert = aktuellAngepasst ? manuell.uebertrag_tage : stat.uebertrag_vorjahr;
+
+    // Lade aktuelle Verfalls-Einstellung des Mitarbeiters
+    const mitarbeiterData = await this.dataManager.getMitarbeiter(mitarbeiterId);
+    // Default: 1 = verfällt (true), 0 = verfällt nicht
+    const verfaelltAktuell = mitarbeiterData && mitarbeiterData.uebertrag_verfaellt !== undefined
+      ? mitarbeiterData.uebertrag_verfaellt === 1
+      : true;
 
     const modalHtml = `
       <div class="modal fade" id="uebertragModal" tabindex="-1">
@@ -60,6 +67,28 @@ class UebertragDialog extends DialogBase {
                   </small>
                 </div>
 
+                <!-- NEU: Verfalls-Einstellung -->
+                <div class="mb-3">
+                  <div class="card bg-dark border-secondary">
+                    <div class="card-body py-2">
+                      <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" 
+                               id="uebertragVerfaellt" 
+                               ${verfaelltAktuell ? 'checked' : ''}>
+                        <label class="form-check-label fw-bold" for="uebertragVerfaellt">
+                          Übertrag verfällt am 31.03.${jahr}
+                        </label>
+                      </div>
+                      <small class="text-muted d-block mt-1" id="verfaelltHinweis">
+                        ${verfaelltAktuell
+                          ? `<i class="bi bi-exclamation-triangle text-warning"></i> Nicht bis 31.03. genutzter Übertrag verfällt automatisch.`
+                          : `<i class="bi bi-check-circle text-success"></i> Übertrag läuft nicht ab – bleibt unbegrenzt gültig.`
+                        }
+                      </small>
+                    </div>
+                  </div>
+                </div>
+
                 <div class="mb-3">
                   <label class="form-label">Notiz (optional)</label>
                   <textarea class="form-control" id="notiz" rows="2" 
@@ -89,6 +118,11 @@ class UebertragDialog extends DialogBase {
 
     await this.showModal(modalHtml, async () => {
       const zuruecksetzen = document.getElementById('zuruecksetzen');
+      const verfaelltCheckbox = document.getElementById('uebertragVerfaellt');
+      const verfaelltWert = verfaelltCheckbox ? (verfaelltCheckbox.checked ? 1 : 0) : 1;
+
+      // Verfalls-Einstellung immer speichern (unabhängig vom Zurücksetzen)
+      await this.dataManager.setUebertragVerfaellt(mitarbeiterId, verfaelltWert);
       
       if (zuruecksetzen && zuruecksetzen.checked) {
         // Manuelle Anpassung entfernen
@@ -114,7 +148,8 @@ class UebertragDialog extends DialogBase {
 
       try {
         await this.dataManager.setManuellAngepassterUebertrag(mitarbeiterId, jahr, tage, notiz);
-        showNotification('Erfolg', `Übertrag wurde auf ${formatZahl(tage)} Tage angepasst`, 'success');
+        const verfaelltText = verfaelltWert === 1 ? 'verfällt am 31.03.' : 'verfällt nicht';
+        showNotification('Erfolg', `Übertrag auf ${formatZahl(tage)} Tage angepasst (${verfaelltText})`, 'success');
         if (callback) await callback();
         return true;
       } catch (error) {
@@ -122,6 +157,21 @@ class UebertragDialog extends DialogBase {
         return false;
       }
     });
+
+    // Hinweis-Text beim Umschalten der Checkbox aktualisieren
+    setTimeout(() => {
+      const checkbox = document.getElementById('uebertragVerfaellt');
+      const hinweis = document.getElementById('verfaelltHinweis');
+      if (checkbox && hinweis) {
+        checkbox.addEventListener('change', () => {
+          if (checkbox.checked) {
+            hinweis.innerHTML = `<i class="bi bi-exclamation-triangle text-warning"></i> Nicht bis 31.03. genutzter Übertrag verfällt automatisch.`;
+          } else {
+            hinweis.innerHTML = `<i class="bi bi-check-circle text-success"></i> Übertrag läuft nicht ab – bleibt unbegrenzt gültig.`;
+          }
+        });
+      }
+    }, 100);
   }
 }
 

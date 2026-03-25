@@ -675,21 +675,31 @@ modal.show();
  * Lädt und zeigt Verfallsinformation an
  * NEU: Zeigt wie viel Urlaub bis 31.03. verfällt
  */
+
 async _ladeVerfallsinfo(modalElement, mitarbeiterId, jahr) {
   try {
-    const verfallInfo = await this.dataManager.getVerfallenderUrlaub(mitarbeiterId, jahr);
-    
     const verfallZelle = modalElement.querySelector('#verfallendeTage');
-    
     if (!verfallZelle) return;
+ 
+    // Mitarbeiter-Daten laden um Verfalls-Einstellung zu prüfen
+    const mitarbeiter = await this.dataManager.getMitarbeiter(mitarbeiterId);
     
+    // Wenn Verfall deaktiviert → immer 0 Tage anzeigen
+    const verfaelltAktiv = mitarbeiter && mitarbeiter.uebertrag_verfaellt !== undefined
+      ? mitarbeiter.uebertrag_verfaellt === 1
+      : true; // Default: verfällt
+ 
+    if (!verfaelltAktiv) {
+      verfallZelle.innerHTML = `<span class="text-success">0 Tage</span> <small class="text-muted">(kein Verfall)</small>`;
+      return;
+    }
+ 
+    // Verfall ist aktiv → normal berechnen
+    const verfallInfo = await this.dataManager.getVerfallenderUrlaub(mitarbeiterId, jahr);
     const verfallendeTage = verfallInfo.verfaellt;
-    
-    // Farbe: Grün wenn 0, sonst Rot
     const farbe = verfallendeTage === 0 ? 'text-success' : 'text-danger';
-    
     verfallZelle.innerHTML = `<span class="${farbe}">${formatZahl(verfallendeTage)} Tage</span>`;
-    
+ 
   } catch (error) {
     console.error('Fehler beim Laden der Verfallsinfo:', error);
     const verfallZelle = modalElement.querySelector('#verfallendeTage');
@@ -698,6 +708,7 @@ async _ladeVerfallsinfo(modalElement, mitarbeiterId, jahr) {
     }
   }
 }
+ 
   /**
    * Initialisiert Click-Handler für KPI-Karten und Buttons
    * FIX: Kehrt nach Aktion zur Detailansicht zurück

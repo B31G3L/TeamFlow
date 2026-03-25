@@ -406,6 +406,19 @@ try {
 } catch (error) {
   logger.warn('⚠️ Migration adresse/gehalt übersprungen', { error: error.message });
 }
+
+try {
+  const columns = db.prepare("PRAGMA table_info(mitarbeiter)").all();
+  const hasUebertragVerfaellt = columns.some(col => col.name === 'uebertrag_verfaellt');
+  
+  if (!hasUebertragVerfaellt) {
+    logger.info('🔄 Migration: Füge uebertrag_verfaellt Spalte hinzu');
+    db.exec('ALTER TABLE mitarbeiter ADD COLUMN uebertrag_verfaellt INTEGER NOT NULL DEFAULT 1');
+    logger.success('✅ Migration erfolgreich: uebertrag_verfaellt hinzugefügt');
+  }
+} catch (error) {
+  logger.warn('⚠️ Migration uebertrag_verfaellt übersprungen', { error: error.message });
+}
     logger.debug('✅ Tabellen erstellt');
   } catch (error) {
     logger.error('❌ Fehler beim Erstellen der Tabellen', {
