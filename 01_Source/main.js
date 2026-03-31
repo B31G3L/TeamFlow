@@ -873,22 +873,29 @@ ipcMain.handle('export:excel', async (event, data) => {
     const tempJsonPath = path.join(exportDir, `temp_${timestamp}.json`);
     const outputPath = path.join(exportDir, `Urlaub_${timestamp}.xlsx`);
     
-    // 1. JSON schreiben
     fs.writeFileSync(tempJsonPath, JSON.stringify(data, null, 2), 'utf-8');
     logger.info('✅ JSON geschrieben', { path: tempJsonPath });
     
-    // 2. Python-Script Pfad ermitteln
     const isDev = !app.isPackaged;
     const scriptDir = isDev ? path.join(__dirname, 'scripts') : path.join(process.resourcesPath, 'scripts');
     const scriptPath = path.join(scriptDir, 'export_to_excel.py');
     
-    logger.info('🐍 Führe Python-Script aus', { script: scriptPath });
+    logger.info('🐍 Führe Export aus', { script: scriptPath });
     
-    // 3. Python ausführen
-    const pythonCmd = process.platform === 'win32' ? 'python' : 'python3';
+    let command, args;
+    if (app.isPackaged) {
+      const exeName = path.basename(scriptPath, '.py') + '.exe';
+      const exePath = path.join(path.dirname(scriptPath), exeName);
+      command = exePath;
+      args = [tempJsonPath, outputPath];
+    } else {
+      command = process.platform === 'win32' ? 'python' : 'python3';
+      args = [scriptPath, tempJsonPath, outputPath];
+    }
+    
     const result = await new Promise((resolve) => {
-      const child = spawn(pythonCmd, [scriptPath, tempJsonPath, outputPath], { 
-        shell: true,
+      const child = spawn(command, args, { 
+        shell: false,
         cwd: exportDir
       });
       
@@ -898,13 +905,13 @@ ipcMain.handle('export:excel', async (event, data) => {
       child.stdout.on('data', (data) => {
         const text = data.toString();
         stdout += text;
-        logger.debug('Python:', text);
+        logger.debug('Export:', text);
       });
       
       child.stderr.on('data', (data) => {
         const text = data.toString();
         stderr += text;
-        logger.warn('Python stderr:', text);
+        logger.warn('Export stderr:', text);
       });
       
       child.on('close', (code) => {
@@ -912,18 +919,17 @@ ipcMain.handle('export:excel', async (event, data) => {
           logger.success('✅ Excel erfolgreich erstellt', { path: outputPath });
           resolve({ success: true, path: outputPath });
         } else {
-          logger.error('❌ Python-Script fehlgeschlagen', { code, stderr });
+          logger.error('❌ Export fehlgeschlagen', { code, stderr });
           resolve({ success: false, error: `Exit Code ${code}: ${stderr}` });
         }
       });
       
       child.on('error', (error) => {
-        logger.error('❌ Python-Prozess Fehler', { error: error.message });
+        logger.error('❌ Prozess Fehler', { error: error.message });
         resolve({ success: false, error: error.message });
       });
     });
     
-    // 4. Temporäre JSON löschen
     try {
       fs.unlinkSync(tempJsonPath);
       logger.info('🗑️ Temporäre JSON gelöscht');
@@ -931,11 +937,9 @@ ipcMain.handle('export:excel', async (event, data) => {
       logger.warn('⚠️ Konnte temp JSON nicht löschen', { error: err.message });
     }
     
-    // 5. Ordner öffnen bei Erfolg
     if (result.success) {
       const { shell } = require('electron');
       await shell.openPath(exportDir);
-      logger.info('📂 Export-Ordner geöffnet');
     }
     
     return result;
@@ -956,22 +960,29 @@ ipcMain.handle('export:pdf', async (event, data) => {
     const tempJsonPath = path.join(exportDir, `temp_${timestamp}.json`);
     const outputPath = path.join(exportDir, `Urlaub_${timestamp}.pdf`);
     
-    // 1. JSON schreiben
     fs.writeFileSync(tempJsonPath, JSON.stringify(data, null, 2), 'utf-8');
     logger.info('✅ JSON geschrieben', { path: tempJsonPath });
     
-    // 2. Python-Script Pfad ermitteln
     const isDev = !app.isPackaged;
     const scriptDir = isDev ? path.join(__dirname, 'scripts') : path.join(process.resourcesPath, 'scripts');
     const scriptPath = path.join(scriptDir, 'export_to_pdf.py');
     
-    logger.info('🐍 Führe Python-Script aus', { script: scriptPath });
+    logger.info('🐍 Führe Export aus', { script: scriptPath });
     
-    // 3. Python ausführen
-    const pythonCmd = process.platform === 'win32' ? 'python' : 'python3';
+    let command, args;
+    if (app.isPackaged) {
+      const exeName = path.basename(scriptPath, '.py') + '.exe';
+      const exePath = path.join(path.dirname(scriptPath), exeName);
+      command = exePath;
+      args = [tempJsonPath, outputPath];
+    } else {
+      command = process.platform === 'win32' ? 'python' : 'python3';
+      args = [scriptPath, tempJsonPath, outputPath];
+    }
+    
     const result = await new Promise((resolve) => {
-      const child = spawn(pythonCmd, [scriptPath, tempJsonPath, outputPath], { 
-        shell: true,
+      const child = spawn(command, args, { 
+        shell: false,
         cwd: exportDir
       });
       
@@ -981,13 +992,13 @@ ipcMain.handle('export:pdf', async (event, data) => {
       child.stdout.on('data', (data) => {
         const text = data.toString();
         stdout += text;
-        logger.debug('Python:', text);
+        logger.debug('Export:', text);
       });
       
       child.stderr.on('data', (data) => {
         const text = data.toString();
         stderr += text;
-        logger.warn('Python stderr:', text);
+        logger.warn('Export stderr:', text);
       });
       
       child.on('close', (code) => {
@@ -995,18 +1006,17 @@ ipcMain.handle('export:pdf', async (event, data) => {
           logger.success('✅ PDF erfolgreich erstellt', { path: outputPath });
           resolve({ success: true, path: outputPath });
         } else {
-          logger.error('❌ Python-Script fehlgeschlagen', { code, stderr });
+          logger.error('❌ Export fehlgeschlagen', { code, stderr });
           resolve({ success: false, error: `Exit Code ${code}: ${stderr}` });
         }
       });
       
       child.on('error', (error) => {
-        logger.error('❌ Python-Prozess Fehler', { error: error.message });
+        logger.error('❌ Prozess Fehler', { error: error.message });
         resolve({ success: false, error: error.message });
       });
     });
     
-    // 4. Temporäre JSON löschen
     try {
       fs.unlinkSync(tempJsonPath);
       logger.info('🗑️ Temporäre JSON gelöscht');
@@ -1014,11 +1024,9 @@ ipcMain.handle('export:pdf', async (event, data) => {
       logger.warn('⚠️ Konnte temp JSON nicht löschen', { error: err.message });
     }
     
-    // 5. Ordner öffnen bei Erfolg
     if (result.success) {
       const { shell } = require('electron');
       await shell.openPath(exportDir);
-      logger.info('📂 Export-Ordner geöffnet');
     }
     
     return result;
@@ -1045,22 +1053,29 @@ ipcMain.handle('export:employeeDetailPdf', async (event, data) => {
     const tempJsonPath = path.join(exportDir, `temp_${timestamp}.json`);
     const outputPath = path.join(exportDir, `Mitarbeiter_${employeeName}_${timestamp}.pdf`);
     
-    // 1. JSON schreiben
     fs.writeFileSync(tempJsonPath, JSON.stringify(data, null, 2), 'utf-8');
     logger.info('✅ JSON geschrieben', { path: tempJsonPath });
     
-    // 2. Python-Script Pfad ermitteln
     const isDev = !app.isPackaged;
     const scriptDir = isDev ? path.join(__dirname, 'scripts') : path.join(process.resourcesPath, 'scripts');
     const scriptPath = path.join(scriptDir, 'export_employee_detail.py');
     
-    logger.info('🐍 Führe Python-Script aus', { script: scriptPath });
+    logger.info('🐍 Führe Export aus', { script: scriptPath });
     
-    // 3. Python ausführen
-    const pythonCmd = process.platform === 'win32' ? 'python' : 'python3';
+    let command, args;
+    if (app.isPackaged) {
+      const exeName = path.basename(scriptPath, '.py') + '.exe';
+      const exePath = path.join(path.dirname(scriptPath), exeName);
+      command = exePath;
+      args = [tempJsonPath, outputPath];
+    } else {
+      command = process.platform === 'win32' ? 'python' : 'python3';
+      args = [scriptPath, tempJsonPath, outputPath];
+    }
+    
     const result = await new Promise((resolve) => {
-      const child = spawn(pythonCmd, [scriptPath, tempJsonPath, outputPath], { 
-        shell: true,
+      const child = spawn(command, args, { 
+        shell: false,
         cwd: exportDir
       });
       
@@ -1070,13 +1085,13 @@ ipcMain.handle('export:employeeDetailPdf', async (event, data) => {
       child.stdout.on('data', (data) => {
         const text = data.toString();
         stdout += text;
-        logger.debug('Python:', text);
+        logger.debug('Export:', text);
       });
       
       child.stderr.on('data', (data) => {
         const text = data.toString();
         stderr += text;
-        logger.warn('Python stderr:', text);
+        logger.warn('Export stderr:', text);
       });
       
       child.on('close', (code) => {
@@ -1084,18 +1099,17 @@ ipcMain.handle('export:employeeDetailPdf', async (event, data) => {
           logger.success('✅ PDF erfolgreich erstellt', { path: outputPath });
           resolve({ success: true, path: outputPath });
         } else {
-          logger.error('❌ Python-Script fehlgeschlagen', { code, stderr });
+          logger.error('❌ Export fehlgeschlagen', { code, stderr });
           resolve({ success: false, error: `Exit Code ${code}: ${stderr}` });
         }
       });
       
       child.on('error', (error) => {
-        logger.error('❌ Python-Prozess Fehler', { error: error.message });
+        logger.error('❌ Prozess Fehler', { error: error.message });
         resolve({ success: false, error: error.message });
       });
     });
     
-    // 4. Temporäre JSON löschen
     try {
       fs.unlinkSync(tempJsonPath);
       logger.info('🗑️ Temporäre JSON gelöscht');
@@ -1103,11 +1117,9 @@ ipcMain.handle('export:employeeDetailPdf', async (event, data) => {
       logger.warn('⚠️ Konnte temp JSON nicht löschen', { error: err.message });
     }
     
-    // 5. Ordner öffnen bei Erfolg
     if (result.success) {
       const { shell } = require('electron');
       await shell.openPath(exportDir);
-      logger.info('📂 Export-Ordner geöffnet');
     }
     
     return result;
