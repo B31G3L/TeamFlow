@@ -469,59 +469,77 @@ class TeamFlowDataManager {
   }
 
   async speichereEintrag(eintrag) {
-    try {
-      const typ = eintrag.typ;
-      const mitarbeiterId = eintrag.mitarbeiter_id;
-      const datum = eintrag.datum;
-      const wert = parseFloat(eintrag.wert);
-      const notiz = eintrag.beschreibung || null;
-      let result;
+  try {
+    const typ = eintrag.typ;
+    const mitarbeiterId = eintrag.mitarbeiter_id;
+    const datum = eintrag.datum;
+    const wert = parseFloat(eintrag.wert);
+    const notiz = eintrag.beschreibung || null;
+    let result;
 
-      if (typ === 'urlaub') {
-        let bisDatumStr;
-        if (eintrag.bis_datum) {
-          bisDatumStr = eintrag.bis_datum;
-        } else {
-          const vonDatum = this._parseDatumLokal(datum);
-          const bisDatum = new Date(vonDatum);
-          if (wert > 1) bisDatum.setDate(bisDatum.getDate() + Math.floor(wert) - 1);
-          bisDatumStr = this._formatDatumLokal(bisDatum);
-        }
-        const hatUeberlappung = await this.pruefeUeberlappung('urlaub', mitarbeiterId, datum, bisDatumStr);
-        if (hatUeberlappung) throw new Error('Im gewählten Zeitraum existiert bereits ein Urlaubseintrag.');
-        result = await this.db.run(`
-          INSERT INTO urlaub (mitarbeiter_id, von_datum, bis_datum, tage, notiz) VALUES (?, ?, ?, ?, ?)
-        `, [mitarbeiterId, datum, bisDatumStr, wert, notiz]);
-      } else if (typ === 'krank') {
+    if (typ === 'urlaub') {
+      let bisDatumStr;
+      if (eintrag.bis_datum) {
+        bisDatumStr = eintrag.bis_datum;
+      } else {
         const vonDatum = this._parseDatumLokal(datum);
         const bisDatum = new Date(vonDatum);
         if (wert > 1) bisDatum.setDate(bisDatum.getDate() + Math.floor(wert) - 1);
-        const bisDatumStr = this._formatDatumLokal(bisDatum);
-        const hatUeberlappung = await this.pruefeUeberlappung('krankheit', mitarbeiterId, datum, bisDatumStr);
-        if (hatUeberlappung) throw new Error('Im gewählten Zeitraum existiert bereits ein Krankheitseintrag.');
-        result = await this.db.run(`
-          INSERT INTO krankheit (mitarbeiter_id, von_datum, bis_datum, tage, notiz) VALUES (?, ?, ?, ?, ?)
-        `, [mitarbeiterId, datum, bisDatumStr, wert, notiz]);
-      } else if (typ === 'schulung') {
-        result = await this.db.run(`
-          INSERT INTO schulung (mitarbeiter_id, datum, dauer_tage, titel, notiz) VALUES (?, ?, ?, ?, ?)
-        `, [mitarbeiterId, datum, wert, eintrag.titel || null, notiz]);
-      } else if (typ === 'ueberstunden') {
-        result = await this.db.run(`
-          INSERT INTO ueberstunden (mitarbeiter_id, datum, stunden, notiz) VALUES (?, ?, ?, ?)
-        `, [mitarbeiterId, datum, wert, notiz]);
-      } else {
-        throw new Error(`Unbekannter Typ: ${typ}`);
+        bisDatumStr = this._formatDatumLokal(bisDatum);
       }
+      const hatUeberlappung = await this.pruefeUeberlappung('urlaub', mitarbeiterId, datum, bisDatumStr);
+      if (hatUeberlappung) throw new Error('Im gewählten Zeitraum existiert bereits ein Urlaubseintrag.');
+      result = await this.db.run(`
+        INSERT INTO urlaub (mitarbeiter_id, von_datum, bis_datum, tage, notiz) VALUES (?, ?, ?, ?, ?)
+      `, [mitarbeiterId, datum, bisDatumStr, wert, notiz]);
 
-      if (!result.success) throw new Error(result.error);
-      this.invalidateCache();
-      return true;
-    } catch (error) {
-      console.error('Fehler beim Speichern:', error);
-      throw error;
+    } else if (typ === 'krank') {
+      let bisDatumStr;
+      if (eintrag.bis_datum) {
+        bisDatumStr = eintrag.bis_datum;
+      } else {
+        const vonDatum = this._parseDatumLokal(datum);
+        const bisDatum = new Date(vonDatum);
+        if (wert > 1) bisDatum.setDate(bisDatum.getDate() + Math.floor(wert) - 1);
+        bisDatumStr = this._formatDatumLokal(bisDatum);
+      }
+      const hatUeberlappung = await this.pruefeUeberlappung('krankheit', mitarbeiterId, datum, bisDatumStr);
+      if (hatUeberlappung) throw new Error('Im gewählten Zeitraum existiert bereits ein Krankheitseintrag.');
+      result = await this.db.run(`
+        INSERT INTO krankheit (mitarbeiter_id, von_datum, bis_datum, tage, notiz) VALUES (?, ?, ?, ?, ?)
+      `, [mitarbeiterId, datum, bisDatumStr, wert, notiz]);
+
+    } else if (typ === 'schulung') {
+      let bisDatumStr;
+      if (eintrag.bis_datum) {
+        bisDatumStr = eintrag.bis_datum;
+      } else {
+        const vonDatum = this._parseDatumLokal(datum);
+        const bisDatum = new Date(vonDatum);
+        if (wert > 1) bisDatum.setDate(bisDatum.getDate() + Math.floor(wert) - 1);
+        bisDatumStr = this._formatDatumLokal(bisDatum);
+      }
+      result = await this.db.run(`
+        INSERT INTO schulung (mitarbeiter_id, datum, dauer_tage, titel, notiz) VALUES (?, ?, ?, ?, ?)
+      `, [mitarbeiterId, datum, wert, eintrag.titel || null, notiz]);
+
+    } else if (typ === 'ueberstunden') {
+      result = await this.db.run(`
+        INSERT INTO ueberstunden (mitarbeiter_id, datum, stunden, notiz) VALUES (?, ?, ?, ?)
+      `, [mitarbeiterId, datum, wert, notiz]);
+
+    } else {
+      throw new Error(`Unbekannter Typ: ${typ}`);
     }
+
+    if (!result.success) throw new Error(result.error);
+    this.invalidateCache();
+    return true;
+  } catch (error) {
+    console.error('Fehler beim Speichern:', error);
+    throw error;
   }
+}
 
   async getArbeitszeitmodell(mitarbeiterId) {
     const result = await this.db.query(`

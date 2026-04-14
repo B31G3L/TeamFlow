@@ -83,48 +83,24 @@ class DetailDialog extends DialogBase {
       const verbleibend = verfuegbar - genommen;
 
       // 7. Formatiere Daten für PDF-Export
-      const exportData = {
-        employee: {
-          name: `${mitarbeiter.vorname} ${mitarbeiter.nachname}`,
-          department: mitarbeiter.abteilung_name || 'Keine Abteilung',
-          year: jahr,
-          entitlement: anspruch,
-          carryover: uebertrag,
-          available: verfuegbar,
-          taken: genommen,
-          remaining: verbleibend
-        },
-        vacation: urlaubsdaten.map(entry => ({
-          von: entry.von_datum,
-          bis: entry.bis_datum,
-          tage: entry.tage,
-          notiz: entry.notiz || ''
-        })),
-        absence: [
-          // Krankheitstage
-          ...krankheitsdaten.map(entry => ({
-            typ: 'krankheit',
-            datum: entry.von_datum,
-            wert: entry.tage,
-            notiz: entry.notiz || ''
-          })),
-          // Schulungstage
-          ...schulungsdaten.map(entry => ({
-            typ: 'schulung',
-            datum: entry.datum,
-            wert: entry.dauer_tage,
-            notiz: entry.notiz || '',
-            titel: entry.titel || ''
-          })),
-          // Überstunden
-          ...ueberstundendaten.map(entry => ({
-            typ: 'ueberstunden',
-            datum: entry.datum,
-            wert: entry.stunden,
-            notiz: entry.notiz || ''
-          }))
-        ]
-      };
+     const exportData = {
+  employee: {
+    name: `${mitarbeiter.vorname} ${mitarbeiter.nachname}`,
+    vorname: mitarbeiter.vorname,
+    nachname: mitarbeiter.nachname,
+    department: mitarbeiter.abteilung_name,
+    email: mitarbeiter.email,
+    geburtsdatum: mitarbeiter.geburtsdatum,
+    eintrittsdatum: mitarbeiter.eintrittsdatum,
+    austrittsdatum: mitarbeiter.austrittsdatum,
+    status: mitarbeiter.status,
+    urlaubstage_jahr: mitarbeiter.urlaubstage_jahr,
+    wochenstunden: mitarbeiter.wochenstunden,
+    adresse: mitarbeiter.adresse,
+    gehalt: mitarbeiter.gehalt,
+    arbeitszeitmodell: await this.dataManager.getArbeitszeitmodell(mitarbeiterId)
+  }
+};
 
       // 8. IPC-Call zum Backend
       showNotification('Export', 'PDF wird erstellt...', 'info');

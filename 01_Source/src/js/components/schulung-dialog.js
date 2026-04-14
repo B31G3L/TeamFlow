@@ -105,14 +105,15 @@ class SchulungDialog extends DialogBase {
         return false;
       }
 
-      const eintrag = {
-        typ: 'schulung',
-        mitarbeiter_id: mitarbeiterId,
-        datum: vonDatum,
-        wert: tage,
-        titel: document.getElementById('titel').value || null,
-        beschreibung: document.getElementById('notiz').value || null
-      };
+     const eintrag = {
+  typ: 'schulung',
+  mitarbeiter_id: mitarbeiterId,
+  datum: vonDatum,
+  bis_datum: document.getElementById('bisDatum').value,
+  wert: tage,
+  titel: document.getElementById('titel').value || null,
+  beschreibung: document.getElementById('notiz').value || null
+};
 
       try {
         await this.dataManager.speichereEintrag(eintrag);
@@ -260,6 +261,14 @@ async _initSchulungEventListener(mitarbeiterId) {
       }
     });
   });
+  const titelInput = document.getElementById('titel');
+if (titelInput) {
+  titelInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+    }
+  });
+}
 }
 }
 

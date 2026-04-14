@@ -871,7 +871,7 @@ ipcMain.handle('export:excel', async (event, data) => {
     const exportDir = getExportPath();
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
     const tempJsonPath = path.join(exportDir, `temp_${timestamp}.json`);
-    const outputPath = path.join(exportDir, `Urlaub_${timestamp}.xlsx`);
+    const outputPath = path.join(exportDir, `Abwesenheit_${timestamp}.xlsx`);
     
     fs.writeFileSync(tempJsonPath, JSON.stringify(data, null, 2), 'utf-8');
     logger.info('✅ JSON geschrieben', { path: tempJsonPath });
@@ -958,7 +958,7 @@ ipcMain.handle('export:pdf', async (event, data) => {
     const exportDir = getExportPath();
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
     const tempJsonPath = path.join(exportDir, `temp_${timestamp}.json`);
-    const outputPath = path.join(exportDir, `Urlaub_${timestamp}.pdf`);
+    const outputPath = path.join(exportDir, `Abwesenheit_${timestamp}.pdf`);
     
     fs.writeFileSync(tempJsonPath, JSON.stringify(data, null, 2), 'utf-8');
     logger.info('✅ JSON geschrieben', { path: tempJsonPath });

@@ -1,271 +1,279 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-PDF-Export für Mitarbeiter-Detailansicht
-Erstellt eine formatierte PDF mit Urlaubs- und Abwesenheitsdaten eines einzelnen Mitarbeiters
+Stammdaten-Export fuer TeamFlow
+Erstellt eine formatierte PDF mit den Stammdaten eines Mitarbeiters
 """
 
 import sys
 import json
+import io
 from datetime import datetime
-from reportlab.lib import colors
-from reportlab.lib.pagesizes import A4
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.units import cm
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
-from reportlab.pdfbase import pdfmetrics
-from reportlab.pdfbase.ttfonts import TTFont
+
+try:
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib import colors
+    from reportlab.lib.units import cm
+    from reportlab.platypus import (
+        SimpleDocTemplate, Table, TableStyle,
+        Paragraph, Spacer, HRFlowable
+    )
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
+except ImportError:
+    print("FEHLER: reportlab nicht installiert!", file=sys.stderr)
+    print("Installiere mit: pip install reportlab", file=sys.stderr)
+    sys.exit(1)
 
 
-def create_employee_detail_pdf(employee_data, vacation_data, absence_data, output_path):
-    """
-    Erstellt eine detaillierte PDF für einen Mitarbeiter
-    
-    Args:
-        employee_data: Dict mit Mitarbeiterdaten (name, department, etc.)
-        vacation_data: Liste mit Urlaubseinträgen
-        absence_data: Liste mit Abwesenheitseinträgen
-        output_path: Pfad zur Output-PDF
-    """
-    
-    # PDF-Dokument erstellen (A4 Hochformat)
+# ── Farben ────────────────────────────────────────────────────────────────────
+C_PRIMARY  = colors.HexColor("#1F538D")
+C_LIGHT    = colors.HexColor("#F0F4FA")
+C_GREY     = colors.HexColor("#CCCCCC")
+C_DARK     = colors.HexColor("#1A1A1A")
+C_MUTED    = colors.HexColor("#666666")
+C_WHITE    = colors.white
+C_SECTION  = colors.HexColor("#E8EEF7")
+
+
+def fmt_datum(d):
+    """YYYY-MM-DD -> DD.MM.YYYY"""
+    if not d:
+        return "–"
+    try:
+        return datetime.strptime(d[:10], "%Y-%m-%d").strftime("%d.%m.%Y")
+    except Exception:
+        return d
+
+
+def fmt_zahl(v, einheit=""):
+    if v is None:
+        return "–"
+    try:
+        f = float(v)
+        zahl = int(f) if f == int(f) else round(f, 2)
+        return f"{zahl}{einheit}"
+    except Exception:
+        return "–"
+
+
+def fmt_waehrung(v):
+    if v is None or v == "":
+        return "–"
+    try:
+        f = float(v)
+        return f"{f:,.2f} €".replace(",", "X").replace(".", ",").replace("X", ".")
+    except Exception:
+        return "–"
+
+
+def footer_canvas(canvas, doc):
+    canvas.saveState()
+    canvas.setFont("Helvetica", 8)
+    canvas.setFillColor(C_MUTED)
+    canvas.drawRightString(
+        doc.pagesize[0] - 2*cm,
+        1.2*cm,
+        f"Seite {doc.page}"
+    )
+    canvas.drawString(
+        2*cm,
+        1.2*cm,
+        f"TeamFlow – Stammdaten-Export – {datetime.now().strftime('%d.%m.%Y %H:%M')}"
+    )
+    # Linie
+    canvas.setStrokeColor(C_GREY)
+    canvas.setLineWidth(0.5)
+    canvas.line(2*cm, 1.6*cm, doc.pagesize[0] - 2*cm, 1.6*cm)
+    canvas.restoreState()
+
+
+def abschnitt_header(text, styles):
+    """Erstellt einen farbigen Abschnitts-Header"""
+    style = ParagraphStyle(
+        "AbschnittHeader",
+        parent=styles["Normal"],
+        fontSize=10,
+        fontName="Helvetica-Bold",
+        textColor=C_PRIMARY,
+        spaceBefore=14,
+        spaceAfter=4,
+    )
+    return Paragraph(text.upper(), style)
+
+
+def info_zeile(label, wert, col_widths=(5*cm, 10*cm)):
+    """Erstellt eine Label/Wert-Zeile als kleine Tabelle"""
+    data = [[label, wert if wert else "–"]]
+    t = Table(data, colWidths=list(col_widths))
+    t.setStyle(TableStyle([
+        ("FONTNAME",      (0, 0), (0, 0), "Helvetica-Bold"),
+        ("FONTNAME",      (1, 0), (1, 0), "Helvetica"),
+        ("FONTSIZE",      (0, 0), (-1, -1), 10),
+        ("TEXTCOLOR",     (0, 0), (0, 0), C_MUTED),
+        ("TEXTCOLOR",     (1, 0), (1, 0), C_DARK),
+        ("VALIGN",        (0, 0), (-1, -1), "TOP"),
+        ("TOPPADDING",    (0, 0), (-1, -1), 3),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+        ("LEFTPADDING",   (0, 0), (-1, -1), 0),
+    ]))
+    return t
+
+
+def create_stammdaten_pdf(data, output_path):
+    emp = data.get("employee", {})
+
     doc = SimpleDocTemplate(
         output_path,
         pagesize=A4,
-        rightMargin=2*cm,
-        leftMargin=2*cm,
         topMargin=2*cm,
-        bottomMargin=2*cm
+        bottomMargin=2.5*cm,
+        leftMargin=2*cm,
+        rightMargin=2*cm,
     )
-    
-    elements = []
+
     styles = getSampleStyleSheet()
-    
-    # Custom Styles
-    title_style = ParagraphStyle(
-        'CustomTitle',
-        parent=styles['Heading1'],
-        fontSize=18,
-        textColor=colors.HexColor('#1F538D'),
-        spaceAfter=12,
-        alignment=1  # Center
+    elements = []
+
+    # ── Kopfzeile ─────────────────────────────────────────────────────────────
+    header_data = [[
+        Paragraph(
+            f"<font size='18' color='#1F538D'><b>{emp.get('name', '–')}</b></font>",
+            styles["Normal"]
+        ),
+        Paragraph(
+            f"<font size='10' color='#666666'>{emp.get('department', '–')}</font>",
+            ParagraphStyle("R", parent=styles["Normal"], alignment=TA_RIGHT)
+        ),
+    ]]
+    header_table = Table(header_data, colWidths=[11*cm, 6*cm])
+    header_table.setStyle(TableStyle([
+        ("VALIGN",        (0, 0), (-1, -1), "BOTTOM"),
+        ("TOPPADDING",    (0, 0), (-1, -1), 0),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+    ]))
+    elements.append(header_table)
+    elements.append(HRFlowable(width="100%", thickness=2, color=C_PRIMARY, spaceAfter=4))
+
+    erstellt_style = ParagraphStyle(
+        "Erstellt", parent=styles["Normal"],
+        fontSize=8, textColor=C_MUTED, alignment=TA_RIGHT, spaceAfter=16
     )
-    
-    subtitle_style = ParagraphStyle(
-        'CustomSubtitle',
-        parent=styles['Heading2'],
-        fontSize=14,
-        textColor=colors.HexColor('#1F538D'),
-        spaceAfter=10,
-        spaceBefore=15
-    )
-    
-    info_style = ParagraphStyle(
-        'InfoStyle',
-        parent=styles['Normal'],
-        fontSize=11,
-        spaceAfter=6
-    )
-    
-    # Titel
-    title = Paragraph(f"Urlaubsübersicht: {employee_data.get('name', 'Unbekannt')}", title_style)
-    elements.append(title)
+    elements.append(Paragraph(
+        f"Erstellt am {datetime.now().strftime('%d.%m.%Y um %H:%M Uhr')}",
+        erstellt_style
+    ))
+
+    col_w = (5*cm, 10*cm)
+
+    # ── Persönliche Daten ─────────────────────────────────────────────────────
+    elements.append(abschnitt_header("Persönliche Daten", styles))
+    elements.append(HRFlowable(width="100%", thickness=0.5, color=C_GREY, spaceAfter=6))
+
+    pers_felder = [
+        ("Vorname",      emp.get("vorname")),
+        ("Nachname",     emp.get("nachname")),
+        ("Geburtsdatum", fmt_datum(emp.get("geburtsdatum"))),
+        ("E-Mail",       emp.get("email")),
+    ]
+    for label, wert in pers_felder:
+        if wert and wert != "–":
+            elements.append(info_zeile(label, str(wert), col_w))
+
     elements.append(Spacer(1, 0.3*cm))
-    
-    # Mitarbeiter-Informationen
-    info_text = f"""
-    <b>Abteilung:</b> {employee_data.get('department', 'Keine Abteilung')}<br/>
-    <b>Jahr:</b> {employee_data.get('year', datetime.now().year)}<br/>
-    <b>Urlaubsanspruch:</b> {employee_data.get('entitlement', 0)} Tage<br/>
-    <b>Übertrag:</b> {employee_data.get('carryover', 0)} Tage<br/>
-    <b>Verfügbar:</b> {employee_data.get('available', 0)} Tage<br/>
-    <b>Genommen:</b> {employee_data.get('taken', 0)} Tage<br/>
-    <b>Verbleibend:</b> {employee_data.get('remaining', 0)} Tage
-    """
-    info_para = Paragraph(info_text, info_style)
-    elements.append(info_para)
-    elements.append(Spacer(1, 0.5*cm))
-    
-    # Urlaubseinträge
-    if vacation_data and len(vacation_data) > 0:
-        vacation_title = Paragraph("Urlaubseinträge", subtitle_style)
-        elements.append(vacation_title)
-        
-        # Tabellen-Header
-        vacation_table_data = [['Von', 'Bis', 'Tage', 'Notiz']]
-        
-        # Sortiere nach Startdatum (neueste zuerst)
-        sorted_vacation = sorted(vacation_data, key=lambda x: x.get('von', ''), reverse=True)
-        
-        for entry in sorted_vacation:
-            von = entry.get('von', '')
-            bis = entry.get('bis', '')
-            tage = entry.get('tage', 0)
-            notiz = entry.get('notiz', '')
-            
-            # Formatiere Datum
-            try:
-                von_formatted = datetime.strptime(von, '%Y-%m-%d').strftime('%d.%m.%Y')
-            except:
-                von_formatted = von
-            
-            try:
-                bis_formatted = datetime.strptime(bis, '%Y-%m-%d').strftime('%d.%m.%Y')
-            except:
-                bis_formatted = bis
-            
-            vacation_table_data.append([
-                von_formatted,
-                bis_formatted,
-                str(tage),
-                notiz[:40] + '...' if len(notiz) > 40 else notiz
-            ])
-        
-        # Erstelle Tabelle
-        vacation_table = Table(vacation_table_data, colWidths=[3*cm, 3*cm, 2*cm, 9*cm])
-        vacation_table.setStyle(TableStyle([
-            # Header
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#28a745')),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
-            ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
-            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, 0), 11),
-            ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
-            ('TOPPADDING', (0, 0), (-1, 0), 8),
-            
-            # Daten
-            ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
-            ('FONTSIZE', (0, 1), (-1, -1), 9),
-            ('ALIGN', (0, 1), (2, -1), 'CENTER'),
-            ('ALIGN', (3, 1), (-1, -1), 'LEFT'),
-            ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
-            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.lightgrey]),
-            ('LEFTPADDING', (0, 0), (-1, -1), 6),
-            ('RIGHTPADDING', (0, 0), (-1, -1), 6),
-        ]))
-        
-        elements.append(vacation_table)
-        elements.append(Spacer(1, 0.8*cm))
-    else:
-        no_vacation = Paragraph("Keine Urlaubseinträge vorhanden", info_style)
-        elements.append(no_vacation)
-        elements.append(Spacer(1, 0.5*cm))
-    
-    # Abwesenheitseinträge (Krankheit, Schulung, Überstunden)
-    if absence_data and len(absence_data) > 0:
-        absence_title = Paragraph("Weitere Abwesenheiten", subtitle_style)
-        elements.append(absence_title)
-        
-        # Tabellen-Header
-        absence_table_data = [['Typ', 'Datum', 'Wert', 'Notiz']]
-        
-        # Sortiere nach Datum (neueste zuerst)
-        sorted_absence = sorted(absence_data, key=lambda x: x.get('datum', ''), reverse=True)
-        
-        for entry in sorted_absence:
-            typ = entry.get('typ', '')
-            datum = entry.get('datum', '')
-            wert = entry.get('wert', 0)
-            notiz = entry.get('notiz', '')
-            
-            # Formatiere Datum
-            try:
-                datum_formatted = datetime.strptime(datum, '%Y-%m-%d').strftime('%d.%m.%Y')
-            except:
-                datum_formatted = datum
-            
-            # Typ auf Deutsch
-            typ_labels = {
-                'krankheit': 'Krankheit',
-                'schulung': 'Schulung',
-                'ueberstunden': 'Überstunden'
-            }
-            typ_de = typ_labels.get(typ, typ)
-            
-            # Wert formatieren (mit Einheit)
-            if typ == 'ueberstunden':
-                wert_str = f"{wert:+.1f}h"
-            else:
-                wert_str = f"{wert} Tage"
-            
-            absence_table_data.append([
-                typ_de,
-                datum_formatted,
-                wert_str,
-                notiz[:40] + '...' if len(notiz) > 40 else notiz
-            ])
-        
-        # Erstelle Tabelle
-        absence_table = Table(absence_table_data, colWidths=[3*cm, 3*cm, 2.5*cm, 8.5*cm])
-        absence_table.setStyle(TableStyle([
-            # Header
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1F538D')),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
-            ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
-            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, 0), 11),
-            ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
-            ('TOPPADDING', (0, 0), (-1, 0), 8),
-            
-            # Daten
-            ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
-            ('FONTSIZE', (0, 1), (-1, -1), 9),
-            ('ALIGN', (0, 1), (2, -1), 'CENTER'),
-            ('ALIGN', (3, 1), (-1, -1), 'LEFT'),
-            ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
-            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.lightgrey]),
-            ('LEFTPADDING', (0, 0), (-1, -1), 6),
-            ('RIGHTPADDING', (0, 0), (-1, -1), 6),
-        ]))
-        
-        elements.append(absence_table)
-    else:
-        no_absence = Paragraph("Keine weiteren Abwesenheiten vorhanden", info_style)
-        elements.append(no_absence)
-    
-    # Fußzeile mit Datum
-    elements.append(Spacer(1, 1*cm))
-    footer_text = f"Erstellt am: {datetime.now().strftime('%d.%m.%Y um %H:%M Uhr')}"
-    footer = Paragraph(footer_text, ParagraphStyle('Footer', parent=styles['Normal'], fontSize=8, textColor=colors.grey))
-    elements.append(footer)
-    
-    # PDF erstellen
-    doc.build(elements)
-    sys.stdout.buffer.write(f"PDF erfolgreich erstellt: {output_path}\n".encode('utf-8'))
+
+    # ── Adresse ───────────────────────────────────────────────────────────────
+    adresse = emp.get("adresse")
+    if adresse and adresse.strip():
+        elements.append(abschnitt_header("Adresse", styles))
+        elements.append(HRFlowable(width="100%", thickness=0.5, color=C_GREY, spaceAfter=6))
+
+        # Adresse zeilenweise ausgeben
+        zeilen = [z.strip() for z in adresse.split("\n") if z.strip()]
+        for zeile in zeilen:
+            elements.append(info_zeile("", zeile, (0.5*cm, 14.5*cm)))
+
+        elements.append(Spacer(1, 0.3*cm))
+
+    # ── Arbeitsbeziehung ──────────────────────────────────────────────────────
+    elements.append(abschnitt_header("Arbeitsbeziehung", styles))
+    elements.append(HRFlowable(width="100%", thickness=0.5, color=C_GREY, spaceAfter=6))
+
+    arb_felder = [
+        ("Abteilung",       emp.get("department")),
+        ("Eintrittsdatum",  fmt_datum(emp.get("eintrittsdatum"))),
+        ("Austrittsdatum",  fmt_datum(emp.get("austrittsdatum")) if emp.get("austrittsdatum") else None),
+        ("Status",          emp.get("status")),
+        ("Urlaubstage/Jahr", fmt_zahl(emp.get("urlaubstage_jahr"), " Tage")),
+    ]
+    for label, wert in arb_felder:
+        if wert and wert != "–":
+            elements.append(info_zeile(label, str(wert), col_w))
+
+    elements.append(Spacer(1, 0.3*cm))
+
+    # ── Arbeitszeit ───────────────────────────────────────────────────────────
+    elements.append(abschnitt_header("Arbeitszeit", styles))
+    elements.append(HRFlowable(width="100%", thickness=0.5, color=C_GREY, spaceAfter=6))
+
+    elements.append(info_zeile("Wochenstunden", fmt_zahl(emp.get("wochenstunden"), "h"), col_w))
+
+    # Arbeitszeitmodell wenn vorhanden
+    modell = emp.get("arbeitszeitmodell")
+    if modell:
+        wochentage = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"]
+        labels_map = {"VOLL": "Ganztag", "HALB": "Halbtag", "FREI": "Frei"}
+
+        modell_zeilen = []
+        for tag in modell:
+            wt_idx = tag.get("wochentag", 0)
+            wt_name = wochentage[wt_idx] if wt_idx < 7 else str(wt_idx)
+            az = labels_map.get(tag.get("arbeitszeit", "VOLL"), tag.get("arbeitszeit", ""))
+            modell_zeilen.append(f"{wt_name}: {az}")
+
+        if modell_zeilen:
+            modell_text = "  |  ".join(modell_zeilen)
+            elements.append(info_zeile("Wochenplan", modell_text, col_w))
+
+    elements.append(Spacer(1, 0.3*cm))
+
+    # ── Gehalt (nur wenn vorhanden) ───────────────────────────────────────────
+    gehalt = emp.get("gehalt")
+    if gehalt:
+        elements.append(abschnitt_header("Gehalt", styles))
+        elements.append(HRFlowable(width="100%", thickness=0.5, color=C_GREY, spaceAfter=6))
+        elements.append(info_zeile("Bruttogehalt/Monat", fmt_waehrung(gehalt), col_w))
+        elements.append(Spacer(1, 0.3*cm))
+
+    # ── PDF bauen ─────────────────────────────────────────────────────────────
+    doc.build(elements, onFirstPage=footer_canvas, onLaterPages=footer_canvas)
+    sys.stdout.buffer.write(f"PDF erfolgreich erstellt: {output_path}\n".encode("utf-8"))
 
 
 def main():
     if len(sys.argv) != 3:
-        sys.stderr.buffer.write(b"FEHLER: Falsche Anzahl Parameter!\n")
-        sys.stderr.buffer.write(b"Usage: python export_employee_detail.py <input.json> <output.pdf>\n")
+        sys.stderr.buffer.write(
+            b"FEHLER: Usage: python export_employee_detail.py <input.json> <output.pdf>\n"
+        )
         sys.exit(1)
-    
-    input_file = sys.argv[1]
+
+    input_file  = sys.argv[1]
     output_file = sys.argv[2]
-    
-    # JSON lesen
+
     try:
-        with open(input_file, 'r', encoding='utf-8') as f:
+        with open(input_file, "r", encoding="utf-8") as f:
             data = json.load(f)
-        sys.stdout.buffer.write(f"JSON gelesen\n".encode('utf-8'))
+        sys.stdout.buffer.write(b"JSON gelesen\n")
     except Exception as e:
-        sys.stderr.buffer.write(f"FEHLER beim Lesen der JSON: {str(e)}\n".encode('utf-8'))
+        sys.stderr.buffer.write(f"FEHLER beim Lesen der JSON: {e}\n".encode("utf-8"))
         sys.exit(1)
-    
-    # Daten extrahieren
-    employee_data = data.get('employee', {})
-    vacation_data = data.get('vacation', [])
-    absence_data = data.get('absence', [])
-    
-    # PDF erstellen
+
     try:
-        create_employee_detail_pdf(employee_data, vacation_data, absence_data, output_file)
+        create_stammdaten_pdf(data, output_file)
     except Exception as e:
-        sys.stderr.buffer.write(f"FEHLER beim Erstellen der PDF: {str(e)}\n".encode('utf-8'))
+        sys.stderr.buffer.write(f"FEHLER beim Erstellen der PDF: {e}\n".encode("utf-8"))
         sys.exit(1)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

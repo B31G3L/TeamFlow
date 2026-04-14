@@ -118,6 +118,15 @@ class UeberstundenDialog extends DialogBase {
           stundenInput.value = btn.dataset.stunden;
         });
       });
+      // Verhindere Enter-Schließen bei Stunden-Input
+if (stundenInput) {
+  stundenInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      document.getElementById('btnSpeichern')?.click();
+    }
+  });
+}
     }, 100);
   }
 }

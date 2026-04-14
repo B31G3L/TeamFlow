@@ -85,18 +85,12 @@ const SUBNAV_CONFIG = {
       action: () => dialogManager.zeigeVeranstaltungVerwalten(async () => await loadData())
     },
     { separator: true }, // Separator nach Verwaltung
-    {
-      id: 'subExportExcel',
-      icon: 'bi-file-earmark-excel',
-      text: 'Excel Export',
-      action: () => exportToExcel()
-    },
-    {
-      id: 'subExportPDF',
-      icon: 'bi-file-earmark-pdf',
-      text: 'PDF Export',
-      action: () => exportToPdf()
-    }
+   {
+    id: 'subExport',
+    icon: 'bi-box-arrow-up',
+    text: 'Export',
+    action: () => zeigeExportDialog()
+  }
   ]
 };
 

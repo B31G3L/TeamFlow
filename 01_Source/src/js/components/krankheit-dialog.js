@@ -101,6 +101,7 @@ class KrankheitDialog extends DialogBase {
         typ: 'krank',
         mitarbeiter_id: mitarbeiterId,
         datum: vonDatum,
+        bis_datum: document.getElementById('bisDatum').value, 
         wert: tage,
         beschreibung: document.getElementById('notiz').value || null
       };
