@@ -15,8 +15,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   exportPdf: (data) => ipcRenderer.invoke('export:pdf', data),
   exportEmployeeDetailPdf: (data) => ipcRenderer.invoke('export:employeeDetailPdf', data),
   exportEmployeeYearPdf: (data) => ipcRenderer.invoke('export:employeeYearPdf', data),
-
-
+  exportEmployeeYearExcel: (data) => ipcRenderer.invoke('export:employeeYearExcel', data),
 
   db: {
     query: (sql, params) => ipcRenderer.invoke('db:query', sql, params),
@@ -25,5 +24,3 @@ contextBridge.exposeInMainWorld('electronAPI', {
     exec: (sql) => ipcRenderer.invoke('db:exec', sql)
   }
 });
-
-
