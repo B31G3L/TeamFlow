@@ -1129,3 +1129,82 @@ ipcMain.handle('export:employeeDetailPdf', async (event, data) => {
     return { success: false, error: error.message };
   }
 });
+
+// ========================================
+// IPC-HANDLER FÜR MITARBEITER-JAHRES PDF-EXPORT
+// Anhängen ans Ende von main.js (vor dem letzten Semikolon / EOF)
+// ========================================
+
+ipcMain.handle('export:employeeYearPdf', async (event, data) => {
+  logger.info('📄 Mitarbeiter-Jahres-PDF-Export gestartet', {
+    employee: data.employee?.name,
+    jahr: data.jahr
+  });
+
+  try {
+    const exportDir = getExportPath();
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
+    const employeeName = (data.employee?.name || 'Mitarbeiter').replace(/[^a-zA-Z0-9]/g, '_');
+    const tempJsonPath = path.join(exportDir, `temp_year_${timestamp}.json`);
+    const outputPath = path.join(
+      exportDir,
+      `Jahresuebersicht_${employeeName}_${data.jahr}_${timestamp}.pdf`
+    );
+
+    fs.writeFileSync(tempJsonPath, JSON.stringify(data, null, 2), 'utf-8');
+    logger.info('✅ JSON geschrieben', { path: tempJsonPath });
+
+    const isDev = !app.isPackaged;
+    const scriptDir = isDev
+      ? path.join(__dirname, 'scripts')
+      : path.join(process.resourcesPath, 'scripts');
+    const scriptPath = path.join(scriptDir, 'export_employee_year.py');
+
+    let command, args;
+    if (app.isPackaged) {
+      const exeName = path.basename(scriptPath, '.py') + '.exe';
+      const exePath = path.join(path.dirname(scriptPath), exeName);
+      command = exePath;
+      args = [tempJsonPath, outputPath];
+    } else {
+      command = process.platform === 'win32' ? 'python' : 'python3';
+      args = [scriptPath, tempJsonPath, outputPath];
+    }
+
+    const result = await new Promise((resolve) => {
+      const child = spawn(command, args, { shell: false, cwd: exportDir });
+      let stdout = '', stderr = '';
+
+      child.stdout.on('data', (d) => { stdout += d.toString(); });
+      child.stderr.on('data', (d) => { stderr += d.toString(); logger.warn('Export stderr:', d.toString()); });
+
+      child.on('close', (code) => {
+        if (code === 0) {
+          logger.success('✅ Jahres-PDF erstellt', { path: outputPath });
+          resolve({ success: true, path: outputPath });
+        } else {
+          logger.error('❌ Export fehlgeschlagen', { code, stderr });
+          resolve({ success: false, error: `Exit Code ${code}: ${stderr}` });
+        }
+      });
+
+      child.on('error', (error) => {
+        logger.error('❌ Prozess Fehler', { error: error.message });
+        resolve({ success: false, error: error.message });
+      });
+    });
+
+    try { fs.unlinkSync(tempJsonPath); } catch (_) { /* ignore */ }
+
+    if (result.success) {
+      const { shell } = require('electron');
+      await shell.openPath(exportDir);
+    }
+
+    return result;
+
+  } catch (error) {
+    logger.error('❌ Jahres-PDF-Export fehlgeschlagen', { error: error.message });
+    return { success: false, error: error.message };
+  }
+});

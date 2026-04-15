@@ -14,6 +14,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   exportExcel: (data) => ipcRenderer.invoke('export:excel', data),
   exportPdf: (data) => ipcRenderer.invoke('export:pdf', data),
   exportEmployeeDetailPdf: (data) => ipcRenderer.invoke('export:employeeDetailPdf', data),
+  exportEmployeeYearPdf: (data) => ipcRenderer.invoke('export:employeeYearPdf', data),
+
 
 
   db: {

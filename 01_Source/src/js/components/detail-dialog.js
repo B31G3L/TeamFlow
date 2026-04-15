@@ -117,7 +117,99 @@ class DetailDialog extends DialogBase {
       showNotification('Fehler', `PDF-Export fehlgeschlagen: ${error.message}`, 'danger');
     }
   }
-
+async _exportJahresPDF(mitarbeiterId, jahr) {
+  try {
+    showNotification('Export', 'PDF wird erstellt...', 'info');
+ 
+    // 1. Mitarbeiterdaten
+    const mitarbeiter = await this.dataManager.getMitarbeiter(mitarbeiterId);
+    if (!mitarbeiter) {
+      showNotification('Fehler', 'Mitarbeiter nicht gefunden', 'danger');
+      return;
+    }
+ 
+    // 2. Statistik
+    const stat = await this.dataManager.getMitarbeiterStatistik(mitarbeiterId);
+ 
+    // 3. Alle Einträge des Jahres laden
+    const jahrStr = jahr.toString();
+ 
+    const urlaubResult = await this.dataManager.db.query(
+      `SELECT 'urlaub' as typ, von_datum, bis_datum, tage as wert, notiz, NULL as titel
+       FROM urlaub WHERE mitarbeiter_id = ? AND strftime('%Y', von_datum) = ?
+       ORDER BY von_datum`,
+      [mitarbeiterId, jahrStr]
+    );
+ 
+    const krankheitResult = await this.dataManager.db.query(
+      `SELECT 'krankheit' as typ, von_datum, bis_datum, tage as wert, notiz, NULL as titel
+       FROM krankheit WHERE mitarbeiter_id = ? AND strftime('%Y', von_datum) = ?
+       ORDER BY von_datum`,
+      [mitarbeiterId, jahrStr]
+    );
+ 
+    const schulungResult = await this.dataManager.db.query(
+      `SELECT 'schulung' as typ, datum as von_datum, datum as bis_datum,
+              dauer_tage as wert, notiz, titel
+       FROM schulung WHERE mitarbeiter_id = ? AND strftime('%Y', datum) = ?
+       ORDER BY datum`,
+      [mitarbeiterId, jahrStr]
+    );
+ 
+    const ueberstundenResult = await this.dataManager.db.query(
+      `SELECT 'ueberstunden' as typ, datum as von_datum, datum as bis_datum,
+              stunden as wert, notiz, NULL as titel
+       FROM ueberstunden WHERE mitarbeiter_id = ? AND strftime('%Y', datum) = ?
+       ORDER BY datum`,
+      [mitarbeiterId, jahrStr]
+    );
+ 
+    // 4. Einträge zusammenführen und nach Datum sortieren
+    const alleEintraege = [
+      ...(urlaubResult.success ? urlaubResult.data : []),
+      ...(krankheitResult.success ? krankheitResult.data : []),
+      ...(schulungResult.success ? schulungResult.data : []),
+      ...(ueberstundenResult.success ? ueberstundenResult.data : []),
+    ].sort((a, b) => {
+      const da = a.von_datum || a.datum || '';
+      const db_ = b.von_datum || b.datum || '';
+      return da.localeCompare(db_);
+    });
+ 
+    // 5. Export-Objekt zusammenbauen
+    const exportData = {
+      employee: {
+        name: `${mitarbeiter.vorname} ${mitarbeiter.nachname}`,
+        department: mitarbeiter.abteilung_name,
+      },
+      jahr: jahrStr,
+      stats: stat ? {
+        urlaubsanspruch:    stat.urlaubsanspruch,
+        uebertrag_vorjahr:  stat.uebertrag_vorjahr,
+        urlaub_verfuegbar:  stat.urlaub_verfuegbar,
+        urlaub_genommen:    stat.urlaub_genommen,
+        urlaub_rest:        stat.urlaub_rest,
+        krankheitstage:     stat.krankheitstage,
+        schulungstage:      stat.schulungstage,
+        ueberstunden:       stat.ueberstunden,
+      } : {},
+      eintraege: alleEintraege,
+    };
+ 
+    // 6. IPC-Call
+    const result = await window.electronAPI.exportEmployeeYearPdf(exportData);
+ 
+    if (result.success) {
+      showNotification('Erfolg', `Jahresübersicht ${jahr} exportiert`, 'success');
+    } else {
+      showNotification('Fehler', `PDF-Export fehlgeschlagen: ${result.error}`, 'danger');
+    }
+ 
+  } catch (error) {
+    console.error('Fehler beim Jahres-PDF-Export:', error);
+    showNotification('Fehler', `PDF-Export fehlgeschlagen: ${error.message}`, 'danger');
+  }
+}
   /**
    * Zeigt Detail-Dialog für einen Mitarbeiter
    */
@@ -794,12 +886,12 @@ if (btnBearbeiten) {
 
     // PDF Export - Urlaubsplaner Tab
     const btnExportPDF = modalElement.querySelector('#btnExportPDF');
-    if (btnExportPDF) {
-      btnExportPDF.addEventListener('click', async (e) => {
-        e.preventDefault();
-        await this._exportMitarbeiterPDF(mitarbeiterId, jahr);
-      });
-    }
+   if (btnExportPDF) {
+    btnExportPDF.addEventListener('click', async (e) => {
+       e.preventDefault();
+      await this._exportJahresPDF(mitarbeiterId, jahr);
+     });
+  }
   }
 
   /**
