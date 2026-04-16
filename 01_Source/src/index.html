@@ -11,7 +11,6 @@
 
   <!-- Custom CSS -->
   <link href="styles/main.css" rel="stylesheet">
-  
   <link href="styles/subnavigation-separator.css" rel="stylesheet">
   <link href="styles/mitarbeiter-tabelle.css" rel="stylesheet">
 </head>
@@ -66,7 +65,7 @@
         <div class="toolbar">
           <!-- Suchfeld -->
           <div class="toolbar-item">
-            <input type="text" id="suchfeld" class="form-control" 
+            <input type="text" id="suchfeld" class="form-control"
                    placeholder="🔍 Suche nach Name oder Abteilung...">
           </div>
 
@@ -77,7 +76,7 @@
               <!-- Wird dynamisch gefüllt -->
             </select>
           </div>
-          
+
           <!-- Jahr-Auswahl -->
           <div class="toolbar-item">
             <div class="d-flex align-items-center gap-2">
@@ -87,7 +86,7 @@
               </select>
             </div>
           </div>
-          
+
           <!-- Buttons -->
           <div class="toolbar-item toolbar-right">
             <button class="btn btn-outline-secondary" id="btnAktualisieren" title="Aktualisieren">
@@ -135,8 +134,6 @@
     </div>
   </div>
 
-  
-
   <!-- Bootstrap JS -->
   <script src="../node_modules/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
 
@@ -144,7 +141,7 @@
   <script src="js/database.js"></script>
   <script src="js/data-manager.js"></script>
   <script src="js/components/mitarbeiter-tabelle.js"></script>
-  
+
   <!-- Dialog-Komponenten -->
   <script src="js/components/dialog-base.js"></script>
   <script src="js/components/stammdaten-dialog.js"></script>
@@ -163,30 +160,32 @@
   <script src="js/components/dialog-manager.js"></script>
   <script src="js/components/export-dialog.js"></script>
   <script src="js/renderer.js"></script>
+
   <!-- Footer -->
   <footer class="app-footer" id="appFooter">
     <div class="footer-content">
       <div class="footer-item">
         <i class="bi bi-info-circle"></i>
-        <span id="appVersion">TeamFlow v1.0.0</span>
+        <!-- FIX: Kein hardcodierter Versions-Fallback – initFooter() lädt die echte Version -->
+        <span id="appVersion">TeamFlow</span>
       </div>
-      
+
       <div class="footer-separator"></div>
-      
+
       <div class="footer-item">
         <i class="bi bi-calendar3"></i>
         <span id="currentDate">Wird geladen...</span>
       </div>
-      
+
       <div class="footer-separator"></div>
-      
+
       <div class="footer-item">
         <i class="bi bi-database"></i>
         <span id="dbInfo">Mitarbeiter: 0</span>
       </div>
-      
+
       <div class="footer-separator"></div>
-      
+
       <div class="footer-item">
         <i class="bi bi-hdd"></i>
         <span id="dbPath" title="Datenbank-Pfad">Lade Pfad...</span>

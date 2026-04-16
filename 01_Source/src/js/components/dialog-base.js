@@ -9,6 +9,9 @@
  *   Elementen) und konnte den aktuell sichtbaren Dialog zerstören.
  *   Fix: nur Modal-Elemente entfernen die NICHT gerade sichtbar sind
  *   (kein 'show'-Class und nicht im DOM aktiv).
+ *
+ * FIX Enter-to-Save:
+ *   Enter-Taste löst #btnSpeichern aus – außer in <textarea> und <select>.
  */
 
 let feiertageCache = null;
@@ -308,14 +311,13 @@ class DialogBase {
   }
 
   /**
-   * FIX: showModal() entfernte vorher mit querySelectorAll('.modal') ALLE
-   * Modals auf der Seite, inkl. aktuell sichtbarer. Das führte zu
-   * Memory-Leaks weil Bootstrap Event-Listener auf entfernten Elementen
-   * zurückblieben.
+   * Zeigt einen Modal-Dialog.
    *
-   * Fix: nur Modals entfernen die weder sichtbar (keine .show-Klasse)
-   * noch aktiv sind. Bootstrap-Instanz wird korrekt dispose()d bevor
-   * das Element aus dem DOM entfernt wird.
+   * FIX 1: Nur nicht-sichtbare, verwaiste Modals werden aufgeräumt –
+   *         nicht ALLE, was früher sichtbare Dialoge zerstören konnte.
+   *
+   * FIX 2: Enter-Taste löst #btnSpeichern aus, außer in <textarea>/<select>
+   *         wo Enter ein sinnvolles eigenes Verhalten hat.
    */
   async showModal(html, onSave) {
     // Nur nicht-sichtbare, verwaiste Modals aufräumen
@@ -349,6 +351,16 @@ class DialogBase {
         }
       });
     }
+
+    // FIX: Enter-Taste → Speichern (außer in Textarea und Select)
+    modalElement.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter') return;
+      if (e.target.tagName === 'TEXTAREA') return;
+      if (e.target.tagName === 'SELECT')   return;
+      e.preventDefault();
+      const btn = modalElement.querySelector('#btnSpeichern');
+      if (btn && !btn.disabled) btn.click();
+    });
 
     modal.show();
     modalElement.addEventListener('hidden.bs.modal', () => { modal.dispose(); modalElement.remove(); });

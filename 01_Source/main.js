@@ -517,11 +517,18 @@ ipcMain.handle('export:employeeDetailPdf', async (event, data) => {
   return runExportScript(data, 'export_employee_detail.py', `Mitarbeiter_${name}_{ts}.pdf`);
 });
 
-ipcMain.handle('export:employeeYearPdf', async (event, data) => {
-  const name = (data.employee?.name || 'Mitarbeiter').replace(/[^a-zA-Z0-9]/g, '_');
-  logger.info('📄 Jahres-PDF-Export gestartet', { employee: data.employee?.name, jahr: data.jahr });
-  return runExportScript(data, 'export_employee_year.py', `Jahresuebersicht_${name}_${data.jahr}_{ts}.pdf`);
-});
+
+  ipcMain.handle('export:employeeYearPdf', async (event, data) => {
+    const name = (data.employee?.name || 'Mitarbeiter').replace(/[^a-zA-Z0-9]/g, '_');
+    logger.info('📄 Jahres-PDF-Export gestartet', { employee: data.employee?.name, jahr: data.jahr });
+    return runExportScript(data, 'export_employee_year.py', `Jahresuebersicht_${name}_${data.jahr}_{ts}.pdf`);
+  });
+ 
+  ipcMain.handle('export:employeeYearExcel', async (event, data) => {
+    const name = (data.employee?.name || 'Mitarbeiter').replace(/[^a-zA-Z0-9]/g, '_');
+    logger.info('📊 Jahres-Excel-Export gestartet', { employee: data.employee?.name, jahr: data.jahr });
+    return runExportScript(data, 'export_employee_year_excel.py', `Jahresuebersicht_${name}_${data.jahr}_{ts}.xlsx`);
+  });
 
 // ── Fehlerbehandlung ──────────────────────────────────────────────────────────
 process.on('uncaughtException',  (e) => logger.error('💥 Uncaught Exception',   { error: e.message, stack: e.stack }));

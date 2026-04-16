@@ -13,6 +13,10 @@
  * - Jahresübersicht-Export öffnet Dialog (Format, Jahr, Typen)
  * - Formate: PDF und Excel (.xlsx)
  * - Einträge im Export nach Typ sortiert: Urlaub → Krankheit → Schulung → Überstunden
+ *
+ * FIX:
+ * - zeigeDetails() lädt alle Daten parallel via Promise.all() statt seriell
+ * - _bearbeiteUrlaub/Krankheit/Schulung/Ueberstunden nutzen gemeinsamen _zeigeBearbeitenModal()
  */
 
 class DetailDialog extends DialogBase {
@@ -71,9 +75,6 @@ class DetailDialog extends DialogBase {
   // EXPORT-DIALOG für Jahresübersicht (PDF + Excel)
   // ============================================================
 
-  /**
-   * Zeigt den Export-Dialog für die Jahresübersicht
-   */
   async _zeigeJahresExportDialog(mitarbeiterId, aktuellesJahr) {
     const aktJahr = parseInt(aktuellesJahr);
     const jahrOptionen = [-2, -1, 0, 1].map(offset => {
@@ -93,8 +94,6 @@ class DetailDialog extends DialogBase {
               <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-
-              <!-- FORMAT -->
               <div class="mb-4">
                 <label class="form-label fw-bold">
                   <i class="bi bi-file-earmark"></i> Format
@@ -116,10 +115,7 @@ class DetailDialog extends DialogBase {
                   </div>
                 </div>
               </div>
-
               <hr>
-
-              <!-- JAHR -->
               <div class="mb-4">
                 <label class="form-label fw-bold">
                   <i class="bi bi-calendar-range"></i> Jahr
@@ -128,10 +124,7 @@ class DetailDialog extends DialogBase {
                   ${jahrOptionen}
                 </select>
               </div>
-
               <hr>
-
-              <!-- ABWESENHEITSTYPEN -->
               <div class="mb-3">
                 <label class="form-label fw-bold">
                   <i class="bi bi-funnel"></i> Abwesenheitstypen
@@ -163,7 +156,6 @@ class DetailDialog extends DialogBase {
                   </div>
                 </div>
               </div>
-
             </div>
             <div class="modal-footer">
               <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Abbrechen</button>
@@ -176,7 +168,6 @@ class DetailDialog extends DialogBase {
       </div>
     `;
 
-    // Alte Instanz entfernen
     document.querySelectorAll('#jahresExportDialog').forEach(m => {
       const ex = bootstrap.Modal.getInstance(m);
       if (ex) ex.dispose();
@@ -234,56 +225,51 @@ class DetailDialog extends DialogBase {
   // INTERNE HILFSMETHODE: Einträge laden & sortieren
   // ============================================================
 
-  /**
-   * Lädt gefilterte und nach Typ sortierte Einträge für den Export
-   * Reihenfolge: Urlaub → Krankheit → Schulung → Überstunden
-   */
   async _ladeExportEintraege(mitarbeiterId, jahr, typen) {
     const jahrStr = jahr.toString();
     const TYP_REIHENFOLGE = { urlaub: 0, krankheit: 1, schulung: 2, ueberstunden: 3 };
 
-    const urlaubResult = typen.urlaub
-      ? await this.dataManager.db.query(
-          `SELECT 'urlaub' as typ, von_datum, bis_datum, tage as wert, notiz, NULL as titel
-           FROM urlaub WHERE mitarbeiter_id = ? AND strftime('%Y', von_datum) = ?
-           ORDER BY von_datum`,
-          [mitarbeiterId, jahrStr]
-        )
-      : { success: true, data: [] };
-
-    const krankheitResult = typen.krankheit
-      ? await this.dataManager.db.query(
-          `SELECT 'krankheit' as typ, von_datum, bis_datum, tage as wert, notiz, NULL as titel
-           FROM krankheit WHERE mitarbeiter_id = ? AND strftime('%Y', von_datum) = ?
-           ORDER BY von_datum`,
-          [mitarbeiterId, jahrStr]
-        )
-      : { success: true, data: [] };
-
-    const schulungResult = typen.schulung
-      ? await this.dataManager.db.query(
-          `SELECT 'schulung' as typ, datum as von_datum, datum as bis_datum,
-                  dauer_tage as wert, notiz, titel
-           FROM schulung WHERE mitarbeiter_id = ? AND strftime('%Y', datum) = ?
-           ORDER BY datum`,
-          [mitarbeiterId, jahrStr]
-        )
-      : { success: true, data: [] };
-
-    const ueberstundenResult = typen.ueberstunden
-      ? await this.dataManager.db.query(
-          `SELECT 'ueberstunden' as typ, datum as von_datum, datum as bis_datum,
-                  stunden as wert, notiz, NULL as titel
-           FROM ueberstunden WHERE mitarbeiter_id = ? AND strftime('%Y', datum) = ?
-           ORDER BY datum`,
-          [mitarbeiterId, jahrStr]
-        )
-      : { success: true, data: [] };
+    const [urlaubResult, krankheitResult, schulungResult, ueberstundenResult] = await Promise.all([
+      typen.urlaub
+        ? this.dataManager.db.query(
+            `SELECT 'urlaub' as typ, von_datum, bis_datum, tage as wert, notiz, NULL as titel
+             FROM urlaub WHERE mitarbeiter_id = ? AND strftime('%Y', von_datum) = ?
+             ORDER BY von_datum`,
+            [mitarbeiterId, jahrStr]
+          )
+        : Promise.resolve({ success: true, data: [] }),
+      typen.krankheit
+        ? this.dataManager.db.query(
+            `SELECT 'krankheit' as typ, von_datum, bis_datum, tage as wert, notiz, NULL as titel
+             FROM krankheit WHERE mitarbeiter_id = ? AND strftime('%Y', von_datum) = ?
+             ORDER BY von_datum`,
+            [mitarbeiterId, jahrStr]
+          )
+        : Promise.resolve({ success: true, data: [] }),
+      typen.schulung
+        ? this.dataManager.db.query(
+            `SELECT 'schulung' as typ, datum as von_datum, datum as bis_datum,
+                    dauer_tage as wert, notiz, titel
+             FROM schulung WHERE mitarbeiter_id = ? AND strftime('%Y', datum) = ?
+             ORDER BY datum`,
+            [mitarbeiterId, jahrStr]
+          )
+        : Promise.resolve({ success: true, data: [] }),
+      typen.ueberstunden
+        ? this.dataManager.db.query(
+            `SELECT 'ueberstunden' as typ, datum as von_datum, datum as bis_datum,
+                    stunden as wert, notiz, NULL as titel
+             FROM ueberstunden WHERE mitarbeiter_id = ? AND strftime('%Y', datum) = ?
+             ORDER BY datum`,
+            [mitarbeiterId, jahrStr]
+          )
+        : Promise.resolve({ success: true, data: [] }),
+    ]);
 
     return [
-      ...(urlaubResult.success ? urlaubResult.data : []),
-      ...(krankheitResult.success ? krankheitResult.data : []),
-      ...(schulungResult.success ? schulungResult.data : []),
+      ...(urlaubResult.success      ? urlaubResult.data      : []),
+      ...(krankheitResult.success   ? krankheitResult.data   : []),
+      ...(schulungResult.success    ? schulungResult.data    : []),
       ...(ueberstundenResult.success ? ueberstundenResult.data : []),
     ].sort((a, b) => {
       const typDiff = (TYP_REIHENFOLGE[a.typ] ?? 99) - (TYP_REIHENFOLGE[b.typ] ?? 99);
@@ -292,9 +278,6 @@ class DetailDialog extends DialogBase {
     });
   }
 
-  /**
-   * Lädt Statistik für ein beliebiges Jahr (DataManager temporär umschalten)
-   */
   async _ladeStatistikFuerJahr(mitarbeiterId, jahr) {
     const originalJahr = this.dataManager.aktuellesJahr;
     this.dataManager.aktuellesJahr = parseInt(jahr);
@@ -321,8 +304,10 @@ class DetailDialog extends DialogBase {
         return;
       }
 
-      const stat = await this._ladeStatistikFuerJahr(mitarbeiterId, jahr);
-      const alleEintraege = await this._ladeExportEintraege(mitarbeiterId, jahr, aktiveTypen);
+      const [stat, alleEintraege] = await Promise.all([
+        this._ladeStatistikFuerJahr(mitarbeiterId, jahr),
+        this._ladeExportEintraege(mitarbeiterId, jahr, aktiveTypen),
+      ]);
 
       const exportData = {
         employee: {
@@ -372,8 +357,10 @@ class DetailDialog extends DialogBase {
         return;
       }
 
-      const stat = await this._ladeStatistikFuerJahr(mitarbeiterId, jahr);
-      const alleEintraege = await this._ladeExportEintraege(mitarbeiterId, jahr, aktiveTypen);
+      const [stat, alleEintraege] = await Promise.all([
+        this._ladeStatistikFuerJahr(mitarbeiterId, jahr),
+        this._ladeExportEintraege(mitarbeiterId, jahr, aktiveTypen),
+      ]);
 
       const exportData = {
         employee: {
@@ -409,24 +396,29 @@ class DetailDialog extends DialogBase {
 
   // ============================================================
   // HAUPTDIALOG
+  // FIX: Alle initialen Daten werden parallel geladen (Promise.all)
+  // statt seriell – reduziert Wartezeit bei vielen DB-Calls spürbar.
   // ============================================================
 
   async zeigeDetails(mitarbeiterId, jahr = null, herkunft = 'urlaubsplaner') {
     this.herkunft = herkunft;
     jahr = jahr || this.dataManager.aktuellesJahr;
 
-    const stat = await this.dataManager.getMitarbeiterStatistik(mitarbeiterId);
+    // FIX: stat, eintraege und überstunden parallel laden
+    const [stat, eintraegeRaw, ueberstundenDetails] = await Promise.all([
+      this.dataManager.getMitarbeiterStatistik(mitarbeiterId),
+      this._ladeAlleEintraege(mitarbeiterId, jahr),
+      this.dataManager.getUeberstundenDetails(mitarbeiterId, jahr),
+    ]);
+
     if (!stat) {
       showNotification('Fehler', 'Mitarbeiter nicht gefunden', 'danger');
       return;
     }
 
     const ma = stat.mitarbeiter;
-    const eintraege = await this._ladeAlleEintraege(mitarbeiterId, jahr);
-    const alleEintraegeSortiert = this._kombiniereUndSortiereEintraege(eintraege);
-    const ueberstundenDetails = await this.dataManager.getUeberstundenDetails(mitarbeiterId, jahr);
+    const alleEintraegeSortiert = this._kombiniereUndSortiereEintraege(eintraegeRaw);
     const anzahlNachTyp = this._zaehleEintraegeNachTyp(alleEintraegeSortiert);
-
     const abteilungsFarbe = ma.abteilung_farbe || '#1f538d';
 
     const modalHtml = `
@@ -474,7 +466,6 @@ class DetailDialog extends DialogBase {
                       <div class="p-4">
                         <div class="row">
                           <div class="col-md-6">
-                            <!-- Aktionen Card -->
                             <div class="card bg-dark mb-3">
                               <div class="card-header">
                                 <h6 class="mb-0"><i class="bi bi-gear"></i> Aktionen</h6>
@@ -491,7 +482,6 @@ class DetailDialog extends DialogBase {
                               </div>
                             </div>
 
-                            <!-- Persönliche Daten -->
                             <div class="card bg-dark mb-3">
                               <div class="card-header">
                                 <h6 class="mb-0"><i class="bi bi-person"></i> Persönliche Daten</h6>
@@ -618,7 +608,6 @@ class DetailDialog extends DialogBase {
 
                 <!-- TAB 2: URLAUB & ABWESENHEIT -->
                 <div class="tab-pane fade ${herkunft === 'urlaubsplaner' ? 'show active' : ''}" id="urlaub" role="tabpanel">
-                  <!-- JAHRESAUSWAHL OBEN -->
                   <div class="d-flex align-items-center justify-content-center gap-3 p-3 bg-dark border-bottom">
                     <button class="btn btn-outline-light btn-sm" id="btnVorigesJahr" title="Voriges Jahr">
                       <i class="bi bi-chevron-left"></i>
@@ -635,7 +624,6 @@ class DetailDialog extends DialogBase {
                     <div class="col-md-4 border-end" style="overflow-y: auto; background-color: #1a1a1a;">
                       <div class="p-3">
 
-                        <!-- Urlaub -->
                         <div class="card bg-dark mb-3">
                           <div class="card-header clickable" id="clickUrlaub" style="cursor: pointer;" title="Klicken um Urlaub einzutragen">
                             <div class="d-flex justify-content-between align-items-center">
@@ -690,7 +678,6 @@ class DetailDialog extends DialogBase {
                           </div>
                         </div>
 
-                        <!-- Überstunden -->
                         <div class="card bg-dark mb-3">
                           <div class="card-header clickable" id="clickUeberstunden" style="cursor: pointer;" title="Klicken um Überstunden einzutragen">
                             <div class="d-flex justify-content-between align-items-center">
@@ -724,7 +711,6 @@ class DetailDialog extends DialogBase {
                           </div>
                         </div>
 
-                        <!-- Export Button -->
                         <div class="export-section">
                           <button class="btn btn-outline-danger btn-sm w-100" id="btnExportPDF">
                             <i class="bi bi-box-arrow-up me-2"></i>
@@ -738,7 +724,6 @@ class DetailDialog extends DialogBase {
                     <!-- RECHTE SPALTE -->
                     <div class="col-md-8" style="display: flex; flex-direction: column;">
 
-                      <!-- Statistik -->
                       <div class="p-3 border-bottom" style="flex-shrink: 0; background-color: #2d2d2d;">
                         <div class="row g-3">
                           <div class="col-md-4">
@@ -786,7 +771,6 @@ class DetailDialog extends DialogBase {
                         </div>
                       </div>
 
-                      <!-- Einträge-Liste -->
                       <div style="flex: 1; overflow-y: auto; background-color: #1a1a1a;">
                         <div class="p-3">
                           <div class="d-flex justify-content-between align-items-center mb-3">
@@ -855,8 +839,11 @@ class DetailDialog extends DialogBase {
     this._initClickHandlers(modalElement, mitarbeiterId, modal, jahr);
     this._initJahrNavigation(modalElement, mitarbeiterId, modal, jahr);
 
-    await this._ladeUndZeigeArbeitszeitmodell(mitarbeiterId);
-    await this._ladeVerfallsinfo(modalElement, mitarbeiterId, jahr);
+    // Arbeitszeitmodell und Verfallsinfo parallel laden (nicht blockierend)
+    Promise.all([
+      this._ladeUndZeigeArbeitszeitmodell(mitarbeiterId),
+      this._ladeVerfallsinfo(modalElement, mitarbeiterId, jahr),
+    ]);
 
     modal.show();
 
@@ -959,7 +946,6 @@ class DetailDialog extends DialogBase {
       await this._exportMitarbeiterPDF(mitarbeiterId, jahr);
     });
 
-    // Export-Button öffnet jetzt den Dialog mit Format-Auswahl
     bind('#btnExportPDF', async (e) => {
       e.preventDefault();
       await this._zeigeJahresExportDialog(mitarbeiterId, jahr);
@@ -1067,8 +1053,6 @@ class DetailDialog extends DialogBase {
     });
   }
 
-  _initActionListenersForContainer(container, mitarbeiterId, modal, jahr) {}
-
   async _handleDelete(deleteBtn, mitarbeiterId, modal, jahr) {
     const id = parseInt(deleteBtn.dataset.id);
     const typ = deleteBtn.dataset.typ;
@@ -1091,152 +1075,165 @@ class DetailDialog extends DialogBase {
     modal.hide();
     try {
       const cb = async () => setTimeout(() => this.zeigeDetails(mitarbeiterId, jahr), 300);
-      if (typ === 'urlaub') await this._bearbeiteUrlaub(id, mitarbeiterId, null, null, cb);
-      else if (typ === 'krankheit') await this._bearbeiteKrankheit(id, mitarbeiterId, null, null, cb);
-      else if (typ === 'schulung') await this._bearbeiteSchulung(id, mitarbeiterId, cb);
-      else if (typ === 'ueberstunden') await this._bearbeiteUeberstunden(id, mitarbeiterId, cb);
+      if (typ === 'urlaub')        await this._bearbeiteEintrag(id, typ, cb);
+      else if (typ === 'krankheit') await this._bearbeiteEintrag(id, typ, cb);
+      else if (typ === 'schulung')  await this._bearbeiteEintrag(id, typ, cb);
+      else if (typ === 'ueberstunden') await this._bearbeiteEintrag(id, typ, cb);
     } catch (error) {
       showNotification('Fehler', error.message, 'danger');
       setTimeout(() => this.zeigeDetails(mitarbeiterId, jahr), 300);
     }
   }
 
-  async _bearbeiteUrlaub(id, mitarbeiterId, vonDatum, bisDatum, callback) {
-    const result = await this.dataManager.db.get('SELECT * FROM urlaub WHERE id = ?', [id]);
-    if (!result.success || !result.data) throw new Error('Urlaubseintrag nicht gefunden');
-    const e = result.data;
-    await this.showModal(`
-      <div class="modal fade" id="urlaubBearbeitenModal" tabindex="-1"><div class="modal-dialog"><div class="modal-content">
-        <div class="modal-header bg-success text-white"><h5 class="modal-title"><i class="bi bi-pencil"></i> Urlaub bearbeiten</h5>
-          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
-        <div class="modal-body"><form id="urlaubBearbeitenForm">
-          <div class="row">
-            <div class="col-md-6 mb-3"><label class="form-label">Von *</label>
-              <input type="date" class="form-control" id="vonDatum" value="${e.von_datum}" required></div>
-            <div class="col-md-6 mb-3"><label class="form-label">Bis *</label>
-              <input type="date" class="form-control" id="bisDatum" value="${e.bis_datum}" required></div>
+  // ============================================================
+  // FIX: Generischer Bearbeiten-Modal ersetzt 4× identischen Boilerplate
+  //
+  // Vorher: _bearbeiteUrlaub(), _bearbeiteKrankheit(), _bearbeiteSchulung(),
+  //         _bearbeiteUeberstunden() – je ~50 Zeilen, 95% identisch.
+  // Jetzt:  _zeigeBearbeitenModal(config) + _bearbeiteEintrag(id, typ, cb)
+  // ============================================================
+
+  _getBearbeitenConfig(typ, eintrag) {
+    switch (typ) {
+      case 'urlaub':
+        return {
+          titel: 'Urlaub bearbeiten',
+          headerClass: 'bg-success text-white',
+          btnClass: 'btn-success',
+          felder: [
+            { label: 'Von *',          id: 'vonDatum',  type: 'date',   value: eintrag.von_datum, required: true },
+            { label: 'Bis *',          id: 'bisDatum',  type: 'date',   value: eintrag.bis_datum, required: true },
+            { label: 'Urlaubstage *',  id: 'tage',      type: 'number', value: eintrag.tage,      required: true, attrs: 'step="0.5" min="0.5"' },
+            { label: 'Notiz',          id: 'notiz',     type: 'textarea', value: eintrag.notiz || '' },
+          ],
+          updateSql: 'UPDATE urlaub SET von_datum=?,bis_datum=?,tage=?,notiz=? WHERE id=?',
+          getParams: () => [
+            document.getElementById('vonDatum').value,
+            document.getElementById('bisDatum').value,
+            parseFloat(document.getElementById('tage').value),
+            document.getElementById('notiz').value || null,
+            eintrag.id,
+          ],
+        };
+      case 'krankheit':
+        return {
+          titel: 'Krankheit bearbeiten',
+          headerClass: 'bg-danger text-white',
+          btnClass: 'btn-danger',
+          felder: [
+            { label: 'Von *',            id: 'vonDatum', type: 'date',   value: eintrag.von_datum, required: true },
+            { label: 'Bis *',            id: 'bisDatum', type: 'date',   value: eintrag.bis_datum, required: true },
+            { label: 'Krankheitstage *', id: 'tage',     type: 'number', value: eintrag.tage,      required: true, attrs: 'step="0.5" min="0.5"' },
+            { label: 'Notiz',            id: 'notiz',    type: 'textarea', value: eintrag.notiz || '' },
+          ],
+          updateSql: 'UPDATE krankheit SET von_datum=?,bis_datum=?,tage=?,notiz=? WHERE id=?',
+          getParams: () => [
+            document.getElementById('vonDatum').value,
+            document.getElementById('bisDatum').value,
+            parseFloat(document.getElementById('tage').value),
+            document.getElementById('notiz').value || null,
+            eintrag.id,
+          ],
+        };
+      case 'schulung':
+        return {
+          titel: 'Schulung bearbeiten',
+          headerClass: 'bg-info text-white',
+          btnClass: 'btn-info',
+          felder: [
+            { label: 'Datum *',       id: 'datum',     type: 'date',   value: eintrag.datum,      required: true },
+            { label: 'Dauer (Tage) *', id: 'dauerTage', type: 'number', value: eintrag.dauer_tage, required: true, attrs: 'step="0.5" min="0.5"' },
+            { label: 'Titel',         id: 'titel',     type: 'text',   value: eintrag.titel || '' },
+            { label: 'Notiz',         id: 'notiz',     type: 'textarea', value: eintrag.notiz || '' },
+          ],
+          updateSql: 'UPDATE schulung SET datum=?,dauer_tage=?,titel=?,notiz=? WHERE id=?',
+          getParams: () => [
+            document.getElementById('datum').value,
+            parseFloat(document.getElementById('dauerTage').value),
+            document.getElementById('titel').value || null,
+            document.getElementById('notiz').value || null,
+            eintrag.id,
+          ],
+        };
+      case 'ueberstunden':
+        return {
+          titel: 'Überstunden bearbeiten',
+          headerClass: 'bg-warning text-dark',
+          btnClass: 'btn-warning',
+          btnCloseClass: '',
+          felder: [
+            { label: 'Datum *',   id: 'datum',   type: 'date',   value: eintrag.datum,   required: true },
+            { label: 'Stunden *', id: 'stunden', type: 'number', value: eintrag.stunden, required: true, attrs: 'step="0.25"',
+              hint: 'Positive Werte = Aufbau, Negative Werte = Abbau' },
+            { label: 'Notiz',     id: 'notiz',   type: 'textarea', value: eintrag.notiz || '' },
+          ],
+          updateSql: 'UPDATE ueberstunden SET datum=?,stunden=?,notiz=? WHERE id=?',
+          getParams: () => [
+            document.getElementById('datum').value,
+            parseFloat(document.getElementById('stunden').value),
+            document.getElementById('notiz').value || null,
+            eintrag.id,
+          ],
+        };
+      default:
+        throw new Error(`Unbekannter Typ: ${typ}`);
+    }
+  }
+
+  _renderFeld(feld) {
+    const req = feld.required ? 'required' : '';
+    const attrs = feld.attrs || '';
+    let input;
+    if (feld.type === 'textarea') {
+      input = `<textarea class="form-control" id="${feld.id}" rows="2">${feld.value}</textarea>`;
+    } else {
+      input = `<input type="${feld.type}" class="form-control" id="${feld.id}" value="${feld.value}" ${req} ${attrs}>`;
+    }
+    const hint = feld.hint ? `<small class="text-muted">${feld.hint}</small>` : '';
+    return `<div class="mb-3"><label class="form-label">${feld.label}</label>${input}${hint}</div>`;
+  }
+
+  async _bearbeiteEintrag(id, typ, callback) {
+    const tabelle = typ === 'ueberstunden' ? 'ueberstunden' :
+                    typ === 'schulung'     ? 'schulung'     :
+                    typ === 'urlaub'       ? 'urlaub'       : 'krankheit';
+
+    const result = await this.dataManager.db.get(`SELECT * FROM ${tabelle} WHERE id = ?`, [id]);
+    if (!result.success || !result.data) throw new Error(`${this._getTypLabel(typ)}-Eintrag nicht gefunden`);
+
+    const config = this._getBearbeitenConfig(typ, result.data);
+    const formId = `${typ}BearbeitenForm`;
+    const felder = config.felder.map(f => this._renderFeld(f)).join('');
+    const closeBtnClass = config.btnCloseClass !== undefined ? config.btnCloseClass : 'btn-close-white';
+
+    const modalHtml = `
+      <div class="modal fade" id="${typ}BearbeitenModal" tabindex="-1">
+        <div class="modal-dialog"><div class="modal-content">
+          <div class="modal-header ${config.headerClass}">
+            <h5 class="modal-title"><i class="bi bi-pencil"></i> ${config.titel}</h5>
+            <button type="button" class="btn-close ${closeBtnClass}" data-bs-dismiss="modal"></button>
           </div>
-          <div class="mb-3"><label class="form-label">Urlaubstage *</label>
-            <input type="number" class="form-control" id="tage" value="${e.tage}" step="0.5" min="0.5" required></div>
-          <div class="mb-3"><label class="form-label">Notiz</label>
-            <textarea class="form-control" id="notiz" rows="2">${e.notiz || ''}</textarea></div>
-        </form></div>
-        <div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Abbrechen</button>
-          <button type="button" class="btn btn-success" id="btnSpeichern"><i class="bi bi-check-lg"></i> Speichern</button></div>
-      </div></div></div>`, async () => {
-      const form = document.getElementById('urlaubBearbeitenForm');
-      if (!form.checkValidity()) { form.reportValidity(); return false; }
-      const r = await this.dataManager.db.run(
-        'UPDATE urlaub SET von_datum=?,bis_datum=?,tage=?,notiz=? WHERE id=?',
-        [document.getElementById('vonDatum').value, document.getElementById('bisDatum').value,
-         parseFloat(document.getElementById('tage').value), document.getElementById('notiz').value || null, id]);
-      if (!r.success) { showNotification('Fehler', r.error, 'danger'); return false; }
-      this.dataManager.invalidateCache();
-      showNotification('Erfolg', 'Urlaub wurde aktualisiert', 'success');
-      if (callback) await callback(); return true;
-    });
-  }
-
-  async _bearbeiteKrankheit(id, mitarbeiterId, vonDatum, bisDatum, callback) {
-    const result = await this.dataManager.db.get('SELECT * FROM krankheit WHERE id = ?', [id]);
-    if (!result.success || !result.data) throw new Error('Krankheitseintrag nicht gefunden');
-    const e = result.data;
-    await this.showModal(`
-      <div class="modal fade" id="krankheitBearbeitenModal" tabindex="-1"><div class="modal-dialog"><div class="modal-content">
-        <div class="modal-header bg-danger text-white"><h5 class="modal-title"><i class="bi bi-pencil"></i> Krankheit bearbeiten</h5>
-          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
-        <div class="modal-body"><form id="krankheitBearbeitenForm">
-          <div class="row">
-            <div class="col-md-6 mb-3"><label class="form-label">Von *</label>
-              <input type="date" class="form-control" id="vonDatum" value="${e.von_datum}" required></div>
-            <div class="col-md-6 mb-3"><label class="form-label">Bis *</label>
-              <input type="date" class="form-control" id="bisDatum" value="${e.bis_datum}" required></div>
+          <div class="modal-body">
+            <form id="${formId}">${felder}</form>
           </div>
-          <div class="mb-3"><label class="form-label">Krankheitstage *</label>
-            <input type="number" class="form-control" id="tage" value="${e.tage}" step="0.5" min="0.5" required></div>
-          <div class="mb-3"><label class="form-label">Notiz</label>
-            <textarea class="form-control" id="notiz" rows="2">${e.notiz || ''}</textarea></div>
-        </form></div>
-        <div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Abbrechen</button>
-          <button type="button" class="btn btn-danger" id="btnSpeichern"><i class="bi bi-check-lg"></i> Speichern</button></div>
-      </div></div></div>`, async () => {
-      const form = document.getElementById('krankheitBearbeitenForm');
-      if (!form.checkValidity()) { form.reportValidity(); return false; }
-      const r = await this.dataManager.db.run(
-        'UPDATE krankheit SET von_datum=?,bis_datum=?,tage=?,notiz=? WHERE id=?',
-        [document.getElementById('vonDatum').value, document.getElementById('bisDatum').value,
-         parseFloat(document.getElementById('tage').value), document.getElementById('notiz').value || null, id]);
-      if (!r.success) { showNotification('Fehler', r.error, 'danger'); return false; }
-      this.dataManager.invalidateCache();
-      showNotification('Erfolg', 'Krankheit wurde aktualisiert', 'success');
-      if (callback) await callback(); return true;
-    });
-  }
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Abbrechen</button>
+            <button type="button" class="btn ${config.btnClass}" id="btnSpeichern">
+              <i class="bi bi-check-lg"></i> Speichern
+            </button>
+          </div>
+        </div></div>
+      </div>`;
 
-  async _bearbeiteSchulung(id, mitarbeiterId, callback) {
-    const result = await this.dataManager.db.get('SELECT * FROM schulung WHERE id = ?', [id]);
-    if (!result.success || !result.data) throw new Error('Schulungseintrag nicht gefunden');
-    const e = result.data;
-    await this.showModal(`
-      <div class="modal fade" id="schulungBearbeitenModal" tabindex="-1"><div class="modal-dialog"><div class="modal-content">
-        <div class="modal-header bg-info text-white"><h5 class="modal-title"><i class="bi bi-pencil"></i> Schulung bearbeiten</h5>
-          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
-        <div class="modal-body"><form id="schulungBearbeitenForm">
-          <div class="mb-3"><label class="form-label">Datum *</label>
-            <input type="date" class="form-control" id="datum" value="${e.datum}" required></div>
-          <div class="mb-3"><label class="form-label">Dauer (Tage) *</label>
-            <input type="number" class="form-control" id="dauerTage" value="${e.dauer_tage}" step="0.5" min="0.5" required></div>
-          <div class="mb-3"><label class="form-label">Titel</label>
-            <input type="text" class="form-control" id="titel" value="${e.titel || ''}"></div>
-          <div class="mb-3"><label class="form-label">Notiz</label>
-            <textarea class="form-control" id="notiz" rows="2">${e.notiz || ''}</textarea></div>
-        </form></div>
-        <div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Abbrechen</button>
-          <button type="button" class="btn btn-info" id="btnSpeichern"><i class="bi bi-check-lg"></i> Speichern</button></div>
-      </div></div></div>`, async () => {
-      const form = document.getElementById('schulungBearbeitenForm');
+    await this.showModal(modalHtml, async () => {
+      const form = document.getElementById(formId);
       if (!form.checkValidity()) { form.reportValidity(); return false; }
-      const r = await this.dataManager.db.run(
-        'UPDATE schulung SET datum=?,dauer_tage=?,titel=?,notiz=? WHERE id=?',
-        [document.getElementById('datum').value, parseFloat(document.getElementById('dauerTage').value),
-         document.getElementById('titel').value || null, document.getElementById('notiz').value || null, id]);
+      const r = await this.dataManager.db.run(config.updateSql, config.getParams());
       if (!r.success) { showNotification('Fehler', r.error, 'danger'); return false; }
       this.dataManager.invalidateCache();
-      showNotification('Erfolg', 'Schulung wurde aktualisiert', 'success');
-      if (callback) await callback(); return true;
-    });
-  }
-
-  async _bearbeiteUeberstunden(id, mitarbeiterId, callback) {
-    const result = await this.dataManager.db.get('SELECT * FROM ueberstunden WHERE id = ?', [id]);
-    if (!result.success || !result.data) throw new Error('Überstundeneintrag nicht gefunden');
-    const e = result.data;
-    await this.showModal(`
-      <div class="modal fade" id="ueberstundenBearbeitenModal" tabindex="-1"><div class="modal-dialog"><div class="modal-content">
-        <div class="modal-header bg-warning text-dark"><h5 class="modal-title"><i class="bi bi-pencil"></i> Überstunden bearbeiten</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
-        <div class="modal-body"><form id="ueberstundenBearbeitenForm">
-          <div class="mb-3"><label class="form-label">Datum *</label>
-            <input type="date" class="form-control" id="datum" value="${e.datum}" required></div>
-          <div class="mb-3"><label class="form-label">Stunden *</label>
-            <input type="number" class="form-control" id="stunden" value="${e.stunden}" step="0.25" required>
-            <small class="text-muted">Positive Werte = Aufbau, Negative Werte = Abbau</small></div>
-          <div class="mb-3"><label class="form-label">Notiz</label>
-            <textarea class="form-control" id="notiz" rows="2">${e.notiz || ''}</textarea></div>
-        </form></div>
-        <div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Abbrechen</button>
-          <button type="button" class="btn btn-warning" id="btnSpeichern"><i class="bi bi-check-lg"></i> Speichern</button></div>
-      </div></div></div>`, async () => {
-      const form = document.getElementById('ueberstundenBearbeitenForm');
-      if (!form.checkValidity()) { form.reportValidity(); return false; }
-      const r = await this.dataManager.db.run(
-        'UPDATE ueberstunden SET datum=?,stunden=?,notiz=? WHERE id=?',
-        [document.getElementById('datum').value, parseFloat(document.getElementById('stunden').value),
-         document.getElementById('notiz').value || null, id]);
-      if (!r.success) { showNotification('Fehler', r.error, 'danger'); return false; }
-      this.dataManager.invalidateCache();
-      showNotification('Erfolg', 'Überstunden wurden aktualisiert', 'success');
-      if (callback) await callback(); return true;
+      showNotification('Erfolg', `${config.titel.replace(' bearbeiten', '')} wurde aktualisiert`, 'success');
+      if (callback) await callback();
+      return true;
     });
   }
 
@@ -1266,10 +1263,10 @@ class DetailDialog extends DialogBase {
     const j = jahr.toString();
     const q = (sql, p) => this.dataManager.db.query(sql, p);
     const [u, k, s, ue] = await Promise.all([
-      q(`SELECT * FROM urlaub     WHERE mitarbeiter_id=? AND strftime('%Y',von_datum)=? ORDER BY von_datum DESC`, [mitarbeiterId, j]),
-      q(`SELECT * FROM krankheit  WHERE mitarbeiter_id=? AND strftime('%Y',von_datum)=? ORDER BY von_datum DESC`, [mitarbeiterId, j]),
-      q(`SELECT * FROM schulung   WHERE mitarbeiter_id=? AND strftime('%Y',datum)=?     ORDER BY datum DESC`,     [mitarbeiterId, j]),
-      q(`SELECT * FROM ueberstunden WHERE mitarbeiter_id=? AND strftime('%Y',datum)=?   ORDER BY datum DESC`,     [mitarbeiterId, j]),
+      q(`SELECT * FROM urlaub       WHERE mitarbeiter_id=? AND strftime('%Y',von_datum)=? ORDER BY von_datum DESC`, [mitarbeiterId, j]),
+      q(`SELECT * FROM krankheit    WHERE mitarbeiter_id=? AND strftime('%Y',von_datum)=? ORDER BY von_datum DESC`, [mitarbeiterId, j]),
+      q(`SELECT * FROM schulung     WHERE mitarbeiter_id=? AND strftime('%Y',datum)=?     ORDER BY datum DESC`,     [mitarbeiterId, j]),
+      q(`SELECT * FROM ueberstunden WHERE mitarbeiter_id=? AND strftime('%Y',datum)=?     ORDER BY datum DESC`,     [mitarbeiterId, j]),
     ]);
     return {
       urlaub:       u.success  ? u.data  : [],

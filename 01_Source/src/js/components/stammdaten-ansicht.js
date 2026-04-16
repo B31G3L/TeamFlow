@@ -1,10 +1,11 @@
 /**
  * Stammdaten-Ansicht Komponente
  * Zeigt Mitarbeiter übersichtlich gruppiert nach Abteilungen
- * 
+ *
  * UPDATE:
  * - Detail-Dialog beim Klick auf Namen
  * - Buttons entfernt, Wochenstunden-Badge hinzugefügt
+ * FIX: Ladeindikator nur beim ersten Aufruf – danach stille Aktualisierung
  */
 
 class StammdatenAnsicht {
@@ -15,16 +16,27 @@ class StammdatenAnsicht {
     this.aktuelleStatistiken = [];
     this.suchbegriff = '';
     this.abteilungFilter = null;
+    this.ersterLadevorgang = true; // FIX: Spinner nur beim ersten Laden
   }
 
   /**
    * Zeigt die Stammdaten-Ansicht an
+   * FIX: Ladeindikator nur beim ersten Aufruf
    */
   async zeigen() {
     if (!this.container) return;
-    
+
+    if (this.ersterLadevorgang) {
+      this.container.innerHTML = `
+        <div class="d-flex align-items-center justify-content-center py-5 text-muted">
+          <div class="spinner-border spinner-border-sm me-3" role="status"></div>
+          Daten werden geladen...
+        </div>`;
+    }
+
     await this.ladeDaten();
     this.render();
+    this.ersterLadevorgang = false;
   }
 
   /**
@@ -40,7 +52,6 @@ class StammdatenAnsicht {
   render() {
     if (!this.container) return;
 
-    // Gruppiere nach Abteilung
     const gruppiert = this._gruppiereNachAbteilung(this.aktuelleStatistiken);
 
     let html = `
@@ -76,9 +87,7 @@ class StammdatenAnsicht {
       });
     }
 
-    html += `
-      </div>
-    `;
+    html += `</div>`;
 
     this.container.innerHTML = html;
     this._initEventListeners();
@@ -109,7 +118,7 @@ class StammdatenAnsicht {
       gruppen.get(abteilungId).stats.push(stat);
     });
 
-    return Array.from(gruppen.values()).sort((a, b) => 
+    return Array.from(gruppen.values()).sort((a, b) =>
       a.abteilung.name.localeCompare(b.abteilung.name)
     );
   }
@@ -118,16 +127,16 @@ class StammdatenAnsicht {
    * Rendert eine Abteilungsgruppe
    */
   _renderAbteilungsGruppe(gruppe) {
-  const { abteilung, stats } = gruppe;
+    const { abteilung, stats } = gruppe;
 
-  let html = `
-    <div class="stammdaten-abteilung stammdaten-abteilung-kompakt" style="border-left: 4px solid ${abteilung.farbe}">
-      <div class="abteilung-header" style="background-color: ${abteilung.farbe}">
-        <h6 class="mb-0 text-white">
-          <i class="bi bi-building"></i> ${abteilung.name}
-          <span class="ms-2 opacity-75">(${stats.length})</span>
-        </h6>
-      </div>
+    let html = `
+      <div class="stammdaten-abteilung stammdaten-abteilung-kompakt" style="border-left: 4px solid ${abteilung.farbe}">
+        <div class="abteilung-header" style="background-color: ${abteilung.farbe}">
+          <h6 class="mb-0 text-white">
+            <i class="bi bi-building"></i> ${abteilung.name}
+            <span class="ms-2 opacity-75">(${stats.length})</span>
+          </h6>
+        </div>
         <div class="abteilung-mitarbeiter">
     `;
 
@@ -145,7 +154,6 @@ class StammdatenAnsicht {
 
   /**
    * Rendert eine Mitarbeiter-Karte
-   * UPDATE: Buttons entfernt, Wochenstunden-Badge hinzugefügt
    */
   _renderMitarbeiterKarte(stat) {
     const ma = stat.mitarbeiter;
@@ -173,10 +181,9 @@ class StammdatenAnsicht {
             </div>
           </div>
         </div>
-        
+
         <div class="karte-body">
           <div class="row g-2">
-            <!-- Urlaubsinfo -->
             <div class="col-md-6">
               <div class="info-box urlaub clickable" data-action="urlaub" data-id="${ma.id}">
                 <div class="info-icon">
@@ -190,7 +197,6 @@ class StammdatenAnsicht {
               </div>
             </div>
 
-            <!-- Überstunden -->
             <div class="col-md-6">
               <div class="info-box ueberstunden clickable" data-action="ueberstunden" data-id="${ma.id}">
                 <div class="info-icon">
@@ -204,7 +210,6 @@ class StammdatenAnsicht {
               </div>
             </div>
 
-            <!-- Krankheit -->
             <div class="col-md-6">
               <div class="info-box krankheit clickable" data-action="krank" data-id="${ma.id}">
                 <div class="info-icon">
@@ -217,7 +222,6 @@ class StammdatenAnsicht {
               </div>
             </div>
 
-            <!-- Schulung -->
             <div class="col-md-6">
               <div class="info-box schulung clickable" data-action="schulung" data-id="${ma.id}">
                 <div class="info-icon">
@@ -239,19 +243,17 @@ class StammdatenAnsicht {
    * Initialisiert Event-Listener
    */
   _initEventListeners() {
-    // Event Delegation für alle Click-Actions
     this.container.addEventListener('click', async (e) => {
       const clickable = e.target.closest('[data-action]');
       if (!clickable) return;
 
       const action = clickable.dataset.action;
-      const id = clickable.dataset.id; // String behalten - nicht zu Integer parsen!
+      const id = clickable.dataset.id;
 
       switch (action) {
         case 'details':
-          // Detail-Dialog öffnen und danach zurück zur Stammdatenansicht
           await this.dialogManager.zeigeDetails(id, this.dataManager.aktuellesJahr, 'stammdaten');
-          await this.zeigen(); // Reload nach Dialog
+          await this.zeigen();
           break;
 
         case 'urlaub':
