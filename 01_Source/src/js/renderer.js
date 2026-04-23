@@ -155,7 +155,25 @@ function updateSubnavigation(hauptmenu) {
     subnavContent.appendChild(li);
   });
 }
+// Neue Hilfsfunktion – irgendwo oben im renderer.js
+function updateSubnavAktiv() {
+  // Alle Subnav-Links zurücksetzen
+  document.querySelectorAll('#subnavContent .nav-link').forEach(link => {
+    link.classList.remove('active');
+  });
 
+  // Aktiven Link setzen
+  const idMap = {
+    tabelle:   'subTabelle',
+    kalender:  'subKalender',
+    ehemalige: 'subEhemalige',
+  };
+  const aktivId = idMap[aktuelleAnsicht];
+  if (aktivId) {
+    const aktivLink = document.getElementById(aktivId);
+    if (aktivLink) aktivLink.classList.add('active');
+  }
+}
 /**
  * Setzt das aktive Hauptmenü und wechselt die Ansicht
  */
@@ -264,6 +282,8 @@ async function toggleAnsicht() {
     kalenderAnsichtDiv.classList.add('d-none');
     tabellenAnsicht.classList.remove('d-none');
   }
+    updateSubnavAktiv(); // NEU
+
 }
 
 /**
@@ -294,22 +314,25 @@ async function initUI() {
     jahrSelect.appendChild(option);
   });
 
-  jahrSelect.addEventListener('change', async (e) => {
-    dataManager.aktuellesJahr = parseInt(e.target.value);
-    dataManager.invalidateCache();
+ jahrSelect.addEventListener('change', async (e) => {
+  dataManager.aktuellesJahr = parseInt(e.target.value);
+  dataManager.invalidateCache();
 
-    if (aktuellesHauptmenu === 'stammdaten') {
-      await stammdatenAnsicht.zeigen();
-    } else {
-      await loadData();
-      if (aktuelleAnsicht === 'kalender') {
-        kalenderAnsicht.currentYear = dataManager.aktuellesJahr;
-        await kalenderAnsicht.zeigen();
-      }
+  // NEU: Suchfeld leeren beim Jahreswechsel
+  document.getElementById('suchfeld').value = '';
+
+  if (aktuellesHauptmenu === 'stammdaten') {
+    await stammdatenAnsicht.zeigen();
+  } else {
+    await loadData();
+    if (aktuelleAnsicht === 'kalender') {
+      kalenderAnsicht.currentYear = dataManager.aktuellesJahr;
+      await kalenderAnsicht.zeigen();
     }
+  }
 
-    showNotification('Jahr gewechselt', `Aktuelles Jahr: ${dataManager.aktuellesJahr}`, 'info');
-  });
+  showNotification('Jahr gewechselt', `Aktuelles Jahr: ${dataManager.aktuellesJahr}`, 'info');
+});
 
   await updateAbteilungFilter();
 
@@ -452,6 +475,7 @@ async function loadData() {
     await updateFooterDbInfo();
 
     ersterLadevorgang = false;
+      updateSubnavAktiv();
 
   } catch (error) {
     console.error('Fehler beim Laden:', error);
@@ -518,6 +542,8 @@ async function zeigeEhemaligeAnsicht() {
     ehemaligeTabelle = new EhemaligeTabelle(dataManager, dialogManager);
   }
   await ehemaligeTabelle.zeigen('ehemaligeAnsicht');
+    updateSubnavAktiv(); // NEU
+
 }
 async function toggleAnsicht() {
   if (aktuellesHauptmenu !== 'urlaubsplaner') return;
@@ -540,6 +566,8 @@ async function toggleAnsicht() {
     kalenderAnsichtDiv.classList.add('d-none');
     tabellenAnsicht.classList.remove('d-none');
   }
+    updateSubnavAktiv(); // NEU
+
 }
 async function wechsleHauptansicht(menu) {
   const stammdatenContainer    = document.getElementById('stammdatenAnsicht');

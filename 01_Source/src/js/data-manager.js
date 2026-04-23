@@ -35,17 +35,17 @@ class TeamFlowDataManager {
     return new Date(j, m - 1, t);
   }
 
-  async getAlleMitarbeiter() {
-    const result = await this.db.query(`
-      SELECT m.*, a.name as abteilung_name, a.farbe as abteilung_farbe
-      FROM mitarbeiter m
-      LEFT JOIN abteilungen a ON m.abteilung_id = a.id
-      WHERE m.status = 'AKTIV'
-  AND m.austrittsdatum IS NULL
-      ORDER BY m.nachname, m.vorname
-    `, [this.aktuellesJahr]);
-    return result.success ? result.data : [];
-  }
+async getAlleMitarbeiter() {
+  const result = await this.db.query(`
+    SELECT m.*, a.name as abteilung_name, a.farbe as abteilung_farbe
+    FROM mitarbeiter m
+    LEFT JOIN abteilungen a ON m.abteilung_id = a.id
+    WHERE m.status = 'AKTIV'
+      AND m.austrittsdatum IS NULL
+    ORDER BY m.nachname, m.vorname
+  `);
+  return result.success ? result.data : [];
+}
 
   async getMitarbeiter(mitarbeiterId) {
     const result = await this.db.get(`
@@ -348,15 +348,14 @@ class TeamFlowDataManager {
         `SELECT * FROM mitarbeiter WHERE abteilung_id = ? AND status = 'AKTIV'
            AND austrittsdatum IS NULL
          ORDER BY nachname, vorname`,
-        [abtResult.data.id, this.aktuellesJahr]
+        [abtResult.data.id]
       );
       mitarbeiter = maResult.success ? maResult.data : [];
     } else {
       const maResult = await this.db.query(
         `SELECT * FROM mitarbeiter WHERE status = 'AKTIV'
            AND austrittsdatum IS NULL
-         ORDER BY nachname, vorname`,
-        [this.aktuellesJahr]
+         ORDER BY nachname, vorname`
       );
       mitarbeiter = maResult.success ? maResult.data : [];
     }
