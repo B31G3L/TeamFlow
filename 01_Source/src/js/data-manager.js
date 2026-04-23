@@ -41,7 +41,7 @@ class TeamFlowDataManager {
       FROM mitarbeiter m
       LEFT JOIN abteilungen a ON m.abteilung_id = a.id
       WHERE m.status = 'AKTIV'
-        AND (m.austrittsdatum IS NULL OR CAST(strftime('%Y', m.austrittsdatum) AS INTEGER) >= ?)
+  AND m.austrittsdatum IS NULL
       ORDER BY m.nachname, m.vorname
     `, [this.aktuellesJahr]);
     return result.success ? result.data : [];
@@ -346,7 +346,7 @@ class TeamFlowDataManager {
       if (!abtResult.success || !abtResult.data) return [];
       const maResult = await this.db.query(
         `SELECT * FROM mitarbeiter WHERE abteilung_id = ? AND status = 'AKTIV'
-         AND (austrittsdatum IS NULL OR CAST(strftime('%Y', austrittsdatum) AS INTEGER) >= ?)
+           AND austrittsdatum IS NULL
          ORDER BY nachname, vorname`,
         [abtResult.data.id, this.aktuellesJahr]
       );
@@ -354,7 +354,7 @@ class TeamFlowDataManager {
     } else {
       const maResult = await this.db.query(
         `SELECT * FROM mitarbeiter WHERE status = 'AKTIV'
-         AND (austrittsdatum IS NULL OR CAST(strftime('%Y', austrittsdatum) AS INTEGER) >= ?)
+           AND austrittsdatum IS NULL
          ORDER BY nachname, vorname`,
         [this.aktuellesJahr]
       );

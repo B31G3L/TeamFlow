@@ -15,6 +15,7 @@ let tabelle;
 let dialogManager;
 let kalenderAnsicht;
 let stammdatenAnsicht;
+let ehemaligeTabelle;
 let aktuelleAnsicht = 'tabelle'; // 'tabelle' oder 'kalender'
 let aktuellesHauptmenu = 'urlaubsplaner'; // 'stammdaten' oder 'urlaubsplaner'
 let ersterLadevorgang = true; // FIX: Spinner nur beim ersten Laden
@@ -92,7 +93,18 @@ const SUBNAV_CONFIG = {
       icon: 'bi-box-arrow-up',
       text: 'Export',
       action: () => zeigeExportDialog()
+    },
+    { separator: true },
+{
+  id: 'subEhemalige',
+  icon: 'bi-person-x',
+  text: 'Ehemalige',
+  action: async () => {
+    if (aktuelleAnsicht !== 'ehemalige') {
+      await zeigeEhemaligeAnsicht();
     }
+  }
+}
   ]
 };
 
@@ -209,6 +221,7 @@ async function initApp() {
 
     stammdatenAnsicht = new StammdatenAnsicht(dataManager, dialogManager);
     console.log('✅ Stammdaten-Ansicht initialisiert');
+// ehemaligeTabelle wird lazy initialisiert beim ersten Aufruf
 
     await initUI();
     await loadData();
@@ -494,7 +507,70 @@ async function updateFooterDbInfo() {
     document.getElementById('dbInfo').textContent = 'DB: Fehler';
   }
 }
+async function zeigeEhemaligeAnsicht() {
+  aktuelleAnsicht = 'ehemalige';
 
+  document.getElementById('tabellenAnsicht').classList.add('d-none');
+  document.getElementById('kalenderAnsicht').classList.add('d-none');
+  document.getElementById('ehemaligeAnsicht').classList.remove('d-none');
+
+  if (!ehemaligeTabelle) {
+    ehemaligeTabelle = new EhemaligeTabelle(dataManager, dialogManager);
+  }
+  await ehemaligeTabelle.zeigen('ehemaligeAnsicht');
+}
+async function toggleAnsicht() {
+  if (aktuellesHauptmenu !== 'urlaubsplaner') return;
+
+  const tabellenAnsicht  = document.getElementById('tabellenAnsicht');
+  const kalenderAnsichtDiv = document.getElementById('kalenderAnsicht');
+  const ehemaligeAnsichtDiv = document.getElementById('ehemaligeAnsicht');
+
+  // Ehemalige immer ausblenden beim Ansichtswechsel
+  ehemaligeAnsichtDiv?.classList.add('d-none');
+
+  if (aktuelleAnsicht === 'tabelle' || aktuelleAnsicht === 'ehemalige') {
+    aktuelleAnsicht = 'kalender';
+    tabellenAnsicht.classList.add('d-none');
+    kalenderAnsichtDiv.classList.remove('d-none');
+    kalenderAnsicht.currentYear = dataManager.aktuellesJahr;
+    await kalenderAnsicht.zeigen();
+  } else {
+    aktuelleAnsicht = 'tabelle';
+    kalenderAnsichtDiv.classList.add('d-none');
+    tabellenAnsicht.classList.remove('d-none');
+  }
+}
+async function wechsleHauptansicht(menu) {
+  const stammdatenContainer    = document.getElementById('stammdatenAnsicht');
+  const urlaubsplanerContainer = document.getElementById('urlaubsplanerAnsicht');
+
+  if (menu === 'stammdaten') {
+    urlaubsplanerContainer.classList.add('d-none');
+    stammdatenContainer.classList.remove('d-none');
+    // Ehemaligen-Ansicht beim Wechsel zu Stammdaten zurücksetzen
+    if (aktuelleAnsicht === 'ehemalige') {
+      aktuelleAnsicht = 'tabelle';
+      document.getElementById('ehemaligeAnsicht')?.classList.add('d-none');
+      document.getElementById('tabellenAnsicht')?.classList.remove('d-none');
+    }
+    await stammdatenAnsicht.zeigen();
+  } else {
+    stammdatenContainer.classList.add('d-none');
+    urlaubsplanerContainer.classList.remove('d-none');
+
+    if (aktuelleAnsicht === 'tabelle') {
+      await loadData();
+    } else if (aktuelleAnsicht === 'kalender') {
+      await kalenderAnsicht.zeigen();
+    } else if (aktuelleAnsicht === 'ehemalige') {
+      if (!ehemaligeTabelle) {
+        ehemaligeTabelle = new EhemaligeTabelle(dataManager, dialogManager);
+      }
+      await ehemaligeTabelle.zeigen('ehemaligeAnsicht');
+    }
+  }
+}
 /**
  * App starten wenn DOM geladen
  */
