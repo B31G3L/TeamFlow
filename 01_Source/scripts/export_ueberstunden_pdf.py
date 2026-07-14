@@ -84,8 +84,8 @@ def footer_canvas(canvas, doc):
 
 def baue_zusammenfassung(mitarbeiter_liste, gesamt_alle):
     elements = []
-    headers = ["Mitarbeiter", "Abteilung", "Geleistete Stunden", "Anzahl Eintraege"]
-    col_widths = [7*cm, 5*cm, 5*cm, 5*cm]
+    headers = ["Mitarbeiter", "Abteilung", "Geleistete Stunden", "Aktueller Saldo", "Anzahl Eintraege"]
+    col_widths = [6*cm, 4.5*cm, 4*cm, 4*cm, 4*cm]
 
     table_data = [headers]
     style_cmds = [
@@ -116,7 +116,7 @@ def baue_zusammenfassung(mitarbeiter_liste, gesamt_alle):
 
         if abt != aktuelle_abteilung:
             aktuelle_abteilung = abt
-            table_data.append([abt, "", "", ""])
+            table_data.append([abt, "", "", "", ""])
             style_cmds += [
                 ("BACKGROUND", (0, data_row), (-1, data_row), C_ABT),
                 ("TEXTCOLOR",  (0, data_row), (-1, data_row), C_WHITE),
@@ -130,6 +130,7 @@ def baue_zusammenfassung(mitarbeiter_liste, gesamt_alle):
             ma.get("name", ""),
             abt,
             f"{fmt_zahl(eintrag.get('gesamtStunden', 0))} h",
+            f"{fmt_zahl(eintrag.get('aktuellerSaldo', 0))} h",
             len(eintrag.get("eintraege", [])),
         ]
         table_data.append(zeile)
@@ -140,6 +141,7 @@ def baue_zusammenfassung(mitarbeiter_liste, gesamt_alle):
     table_data.append([
         "GESAMT", "",
         f"{fmt_zahl(gesamt_alle)} h",
+        f"{fmt_zahl(sum(fmt_zahl(e.get('aktuellerSaldo', 0)) for e in mitarbeiter_liste))} h",
         sum(len(e.get("eintraege", [])) for e in mitarbeiter_liste),
     ])
     style_cmds += [

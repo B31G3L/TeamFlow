@@ -92,7 +92,7 @@ def schreibe_zusammenfassung(wb, mitarbeiter_liste, von_datum, bis_datum, gesamt
 
     ws.row_dimensions[3].height = 8
 
-    headers = ["Mitarbeiter", "Abteilung", "Geleistete Stunden", "Anzahl Eintraege"]
+    headers = ["Mitarbeiter", "Abteilung", "Geleistete Stunden", "Aktueller Saldo", "Anzahl Eintraege"]
     for col, h in enumerate(headers, 1):
         cell = ws.cell(row=4, column=col, value=h)
         style_header_cell(cell)
@@ -108,7 +108,7 @@ def schreibe_zusammenfassung(wb, mitarbeiter_liste, von_datum, bis_datum, gesamt
 
         if abt != aktuelle_abteilung:
             aktuelle_abteilung = abt
-            ws.merge_cells(f"A{row}:D{row}")
+            ws.merge_cells(f"A{row}:E{row}")
             abt_cell = ws.cell(row=row, column=1, value=abt)
             abt_cell.fill = PatternFill(start_color=C_ABT_BG, end_color=C_ABT_BG, fill_type="solid")
             abt_cell.font = Font(color=C_ABT_FONT, bold=True, size=10)
@@ -121,6 +121,7 @@ def schreibe_zusammenfassung(wb, mitarbeiter_liste, von_datum, bis_datum, gesamt
             name,
             abt,
             fmt_zahl(eintrag.get("gesamtStunden", 0)),
+            fmt_zahl(eintrag.get("aktuellerSaldo", 0)),
             len(eintrag.get("eintraege", [])),
         ]
         for col, wert in enumerate(werte, 1):
@@ -138,11 +139,13 @@ def schreibe_zusammenfassung(wb, mitarbeiter_liste, von_datum, bis_datum, gesamt
 
     cell_c = ws.cell(row=row, column=3, value=fmt_zahl(gesamt_alle))
     style_data_cell(cell_c, bg=C_SUMME_BG, bold=True, center=True)
-    cell_d = ws.cell(row=row, column=4, value=sum(len(e.get("eintraege", [])) for e in mitarbeiter_liste))
+    cell_d = ws.cell(row=row, column=4, value=fmt_zahl(sum(fmt_zahl(e.get("aktuellerSaldo", 0)) for e in mitarbeiter_liste)))
     style_data_cell(cell_d, bg=C_SUMME_BG, bold=True, center=True)
+    cell_e = ws.cell(row=row, column=5, value=sum(len(e.get("eintraege", [])) for e in mitarbeiter_liste))
+    style_data_cell(cell_e, bg=C_SUMME_BG, bold=True, center=True)
     ws.row_dimensions[row].height = 20
 
-    breiten = [28, 20, 20, 18]
+    breiten = [28, 20, 18, 16, 18]
     for i, b in enumerate(breiten, 1):
         ws.column_dimensions[get_column_letter(i)].width = b
 

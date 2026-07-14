@@ -200,10 +200,19 @@ async function _sammleUeberstundenExportDaten(vonDatum, bisDatum) {
 
     const gesamtStunden = eintraege.reduce((s, e) => s + e.stunden, 0);
 
+    // Aktueller Gesamt-Saldo (alle Zeit, unabhängig vom Export-Zeitraum):
+    // Summe aus geleisteten (+) und abgebauten (-) Stunden ergibt direkt den Saldo.
+    const saldoResult = await db.get(
+      `SELECT COALESCE(SUM(stunden), 0) as saldo FROM ueberstunden WHERE mitarbeiter_id = ?`,
+      [ma.id]
+    );
+    const aktuellerSaldo = (saldoResult.success && saldoResult.data) ? saldoResult.data.saldo : 0;
+
     ergebnis.push({
       mitarbeiter: { id: ma.id, name: `${ma.vorname} ${ma.nachname}`, abteilung: ma.abteilung_name },
       eintraege,
       gesamtStunden,
+      aktuellerSaldo,
     });
   }));
 
