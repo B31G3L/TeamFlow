@@ -16,10 +16,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   exportEmployeeDetailPdf: (data) => ipcRenderer.invoke('export:employeeDetailPdf', data),
   exportEmployeeYearPdf: (data) => ipcRenderer.invoke('export:employeeYearPdf', data),
   exportEmployeeYearExcel: (data) => ipcRenderer.invoke('export:employeeYearExcel', data),
-  exportExcel: (data) => ipcRenderer.invoke('export:excel', data),
-exportPdf: (data) => ipcRenderer.invoke('export:pdf', data),
-exportKalenderExcel: (data) => ipcRenderer.invoke('export:kalenderExcel', data),
-exportKalenderPdf: (data) => ipcRenderer.invoke('export:kalenderPdf', data),
+  exportKalenderExcel: (data) => ipcRenderer.invoke('export:kalenderExcel', data),
+  exportKalenderPdf: (data) => ipcRenderer.invoke('export:kalenderPdf', data),
+  exportUeberstundenExcel: (data) => ipcRenderer.invoke('export:ueberstundenExcel', data),
+exportUeberstundenPdf: (data) => ipcRenderer.invoke('export:ueberstundenPdf', data),
 
   db: {
     query: (sql, params) => ipcRenderer.invoke('db:query', sql, params),

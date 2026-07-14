@@ -92,20 +92,19 @@ const SUBNAV_CONFIG = {
       id: 'subExport',
       icon: 'bi-box-arrow-up',
       text: 'Export',
-      action: () => zeigeExportDialog()
+      action: () => {
+        if (aktuelleAnsicht === 'kalender') {
+          zeigeKalenderExportDialog();
+        } else {
+          zeigeExportDialog();
+        }
+      }
+    },{
+      id: 'subUeberstundenExport',
+      icon: 'bi-clock-history',
+      text: 'Überstunden',
+      action: () => zeigeUeberstundenExportDialog()
     },
-    {
-  id: 'subExport',
-  icon: 'bi-box-arrow-up',
-  text: 'Export',
-  action: () => {
-    if (aktuelleAnsicht === 'kalender') {
-      zeigeKalenderExportDialog();
-    } else {
-      zeigeExportDialog();
-    }
-  }
-},
     { separator: true },
 {
   id: 'subEhemalige',

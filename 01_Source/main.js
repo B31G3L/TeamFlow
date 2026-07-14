@@ -529,15 +529,6 @@ ipcMain.handle('export:employeeDetailPdf', async (event, data) => {
     logger.info('📊 Jahres-Excel-Export gestartet', { employee: data.employee?.name, jahr: data.jahr });
     return runExportScript(data, 'export_employee_year_excel.py', `Jahresuebersicht_${name}_${data.jahr}_{ts}.xlsx`);
   });
-  ipcMain.handle('export:excel', async (event, data) => {
-  logger.info('📊 Excel-Export gestartet');
-  return runExportScript(data, 'export_to_excel.py', `Abwesenheit_{ts}.xlsx`);
-});
-
-ipcMain.handle('export:pdf', async (event, data) => {
-  logger.info('📄 PDF-Export gestartet');
-  return runExportScript(data, 'export_to_pdf.py', `Abwesenheit_{ts}.pdf`);
-});
 
 ipcMain.handle('export:kalenderExcel', async (event, data) => {
   logger.info('📅 Kalender-Excel-Export gestartet');
@@ -547,6 +538,15 @@ ipcMain.handle('export:kalenderExcel', async (event, data) => {
 ipcMain.handle('export:kalenderPdf', async (event, data) => {
   logger.info('📅 Kalender-PDF-Export gestartet');
   return runExportScript(data, 'export_kalender_pdf.py', `Kalenderuebersicht_{ts}.pdf`);
+});
+ipcMain.handle('export:ueberstundenExcel', async (event, data) => {
+  logger.info('⏱️ Überstunden-Excel-Export gestartet');
+  return runExportScript(data, 'export_ueberstunden_excel.py', `Ueberstunden_{ts}.xlsx`);
+});
+
+ipcMain.handle('export:ueberstundenPdf', async (event, data) => {
+  logger.info('⏱️ Überstunden-PDF-Export gestartet');
+  return runExportScript(data, 'export_ueberstunden_pdf.py', `Ueberstunden_{ts}.pdf`);
 });
 
 // ── Fehlerbehandlung ──────────────────────────────────────────────────────────
