@@ -8,6 +8,8 @@ Neue Struktur: Zusammenfassung + Detailtabelle
 import sys
 import json
 import io
+from openpyxl.utils import get_column_letter
+
 from datetime import datetime
 
 try:
@@ -187,7 +189,7 @@ def schreibe_zusammenfassung(wb, mitarbeiter_liste, von_datum, bis_datum):
     # Spaltenbreiten
     breiten = [28, 20, 12, 14, 13, 14, 10, 22]
     for i, b in enumerate(breiten, 1):
-        ws.column_dimensions[ws.cell(row=1, column=i).column_letter].width = b
+        ws.column_dimensions[get_column_letter(i)].width = b
 
     ws.freeze_panes = "A5"
 
@@ -265,7 +267,7 @@ def schreibe_detail(wb, mitarbeiter_liste, von_datum, bis_datum):
     # Spaltenbreiten
     breiten = [28, 20, 18, 12, 12, 10, 35]
     for i, b in enumerate(breiten, 1):
-        ws.column_dimensions[ws.cell(row=1, column=i).column_letter].width = b
+        ws.column_dimensions[get_column_letter(i)].width = b
 
     ws.freeze_panes = "A5"
 

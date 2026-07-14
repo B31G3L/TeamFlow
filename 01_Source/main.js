@@ -529,6 +529,25 @@ ipcMain.handle('export:employeeDetailPdf', async (event, data) => {
     logger.info('📊 Jahres-Excel-Export gestartet', { employee: data.employee?.name, jahr: data.jahr });
     return runExportScript(data, 'export_employee_year_excel.py', `Jahresuebersicht_${name}_${data.jahr}_{ts}.xlsx`);
   });
+  ipcMain.handle('export:excel', async (event, data) => {
+  logger.info('📊 Excel-Export gestartet');
+  return runExportScript(data, 'export_to_excel.py', `Abwesenheit_{ts}.xlsx`);
+});
+
+ipcMain.handle('export:pdf', async (event, data) => {
+  logger.info('📄 PDF-Export gestartet');
+  return runExportScript(data, 'export_to_pdf.py', `Abwesenheit_{ts}.pdf`);
+});
+
+ipcMain.handle('export:kalenderExcel', async (event, data) => {
+  logger.info('📅 Kalender-Excel-Export gestartet');
+  return runExportScript(data, 'export_kalender_excel.py', `Kalenderuebersicht_{ts}.xlsx`);
+});
+
+ipcMain.handle('export:kalenderPdf', async (event, data) => {
+  logger.info('📅 Kalender-PDF-Export gestartet');
+  return runExportScript(data, 'export_kalender_pdf.py', `Kalenderuebersicht_{ts}.pdf`);
+});
 
 // ── Fehlerbehandlung ──────────────────────────────────────────────────────────
 process.on('uncaughtException',  (e) => logger.error('💥 Uncaught Exception',   { error: e.message, stack: e.stack }));

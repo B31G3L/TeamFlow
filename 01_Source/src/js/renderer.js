@@ -94,6 +94,18 @@ const SUBNAV_CONFIG = {
       text: 'Export',
       action: () => zeigeExportDialog()
     },
+    {
+  id: 'subExport',
+  icon: 'bi-box-arrow-up',
+  text: 'Export',
+  action: () => {
+    if (aktuelleAnsicht === 'kalender') {
+      zeigeKalenderExportDialog();
+    } else {
+      zeigeExportDialog();
+    }
+  }
+},
     { separator: true },
 {
   id: 'subEhemalige',
