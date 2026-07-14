@@ -89,21 +89,15 @@ const SUBNAV_CONFIG = {
     },
     { separator: true },
     {
-      id: 'subExport',
+      id: 'subExportDropdown',
+      dropdown: true,
       icon: 'bi-box-arrow-up',
       text: 'Export',
-      action: () => {
-        if (aktuelleAnsicht === 'kalender') {
-          zeigeKalenderExportDialog();
-        } else {
-          zeigeExportDialog();
-        }
-      }
-    },{
-      id: 'subUeberstundenExport',
-      icon: 'bi-clock-history',
-      text: 'Überstunden',
-      action: () => zeigeUeberstundenExportDialog()
+      items: [
+        { id: 'subExportAbwesenheit', icon: 'bi-table', text: 'Abwesenheits-Export', action: () => zeigeExportDialog() },
+        { id: 'subExportKalender', icon: 'bi-calendar3', text: 'Kalender-Export', action: () => zeigeKalenderExportDialog() },
+        { id: 'subExportUeberstunden', icon: 'bi-clock-history', text: 'Überstunden-Export', action: () => zeigeUeberstundenExportDialog() },
+      ]
     },
     { separator: true },
 {
@@ -145,6 +139,44 @@ function updateSubnavigation(hauptmenu) {
       separator.className = 'nav-separator';
       separator.innerHTML = '<span class="separator-line"></span>';
       subnavContent.appendChild(separator);
+      return;
+    }
+
+    if (item.dropdown) {
+      const li = document.createElement('li');
+      li.className = 'nav-item dropdown';
+
+      const toggle = document.createElement('a');
+      toggle.className = 'nav-link dropdown-toggle';
+      toggle.href = '#';
+      toggle.id = item.id;
+      toggle.setAttribute('role', 'button');
+      toggle.setAttribute('data-bs-toggle', 'dropdown');
+      toggle.setAttribute('aria-expanded', 'false');
+      toggle.innerHTML = `<i class="bi ${item.icon}"></i> ${item.text}`;
+      li.appendChild(toggle);
+
+      const menu = document.createElement('ul');
+      menu.className = 'dropdown-menu dropdown-menu-dark dropdown-menu-end';
+      menu.setAttribute('aria-labelledby', item.id);
+
+      (item.items || []).forEach((sub) => {
+        const subLi = document.createElement('li');
+        const subA = document.createElement('a');
+        subA.className = 'dropdown-item';
+        subA.href = '#';
+        if (sub.id) subA.id = sub.id;
+        subA.innerHTML = `<i class="bi ${sub.icon}"></i> ${sub.text}`;
+        subA.addEventListener('click', (e) => {
+          e.preventDefault();
+          sub.action();
+        });
+        subLi.appendChild(subA);
+        menu.appendChild(subLi);
+      });
+
+      li.appendChild(menu);
+      subnavContent.appendChild(li);
       return;
     }
 
