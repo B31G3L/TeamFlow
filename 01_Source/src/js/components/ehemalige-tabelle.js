@@ -32,6 +32,7 @@ class EhemaligeTabelle {
       FROM mitarbeiter m
       LEFT JOIN abteilungen a ON m.abteilung_id = a.id
       WHERE m.austrittsdatum IS NOT NULL
+        AND m.austrittsdatum <= date('now')
       ORDER BY m.austrittsdatum DESC, m.nachname, m.vorname
     `);
     this.mitarbeiterListe = result.success ? result.data : [];

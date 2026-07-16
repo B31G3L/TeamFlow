@@ -41,7 +41,7 @@ async getAlleMitarbeiter() {
     FROM mitarbeiter m
     LEFT JOIN abteilungen a ON m.abteilung_id = a.id
     WHERE m.status = 'AKTIV'
-      AND m.austrittsdatum IS NULL
+      AND (m.austrittsdatum IS NULL OR m.austrittsdatum > date('now'))
     ORDER BY m.nachname, m.vorname
   `);
   return result.success ? result.data : [];
@@ -346,7 +346,7 @@ async getAlleMitarbeiter() {
       if (!abtResult.success || !abtResult.data) return [];
       const maResult = await this.db.query(
         `SELECT * FROM mitarbeiter WHERE abteilung_id = ? AND status = 'AKTIV'
-           AND austrittsdatum IS NULL
+           AND (austrittsdatum IS NULL OR austrittsdatum > date('now'))
          ORDER BY nachname, vorname`,
         [abtResult.data.id]
       );
@@ -354,7 +354,7 @@ async getAlleMitarbeiter() {
     } else {
       const maResult = await this.db.query(
         `SELECT * FROM mitarbeiter WHERE status = 'AKTIV'
-           AND austrittsdatum IS NULL
+           AND (austrittsdatum IS NULL OR austrittsdatum > date('now'))
          ORDER BY nachname, vorname`
       );
       mitarbeiter = maResult.success ? maResult.data : [];

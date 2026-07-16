@@ -87,6 +87,7 @@ class KalenderAnsicht {
       FROM mitarbeiter m
       LEFT JOIN abteilungen a ON m.abteilung_id = a.id
       WHERE m.status = 'AKTIV'
+        AND (m.austrittsdatum IS NULL OR m.austrittsdatum > date('now'))
     `;
 
     if (this.selectedAbteilung) {
